@@ -11,12 +11,34 @@ real edge from a hot streak.
 
 ```bash
 pip install -r requirements.txt
-python seed.py        # synthetic mini-season: weeks 1-3 final, week 4 upcoming
-python backtest.py    # replays weeks 1-3 with 2 demo agents, prints boards
+
+# Option A — REAL data: full 2025 NFL season, real closing lines, no API keys
+python loaders/nflverse_loader.py 2025
+python backtest.py            # 472 real graded picks across weeks 1-18
+
+# Option B — synthetic mini-season (has an "upcoming" week for live testing)
+python seed.py && python backtest.py
+
 uvicorn app:app --reload
-# open http://localhost:8000  -> leaderboard UI
-# open http://localhost:8000/docs -> full interactive API docs
+# http://localhost:8000        -> leaderboard UI
+# http://localhost:8000/docs   -> full interactive API docs
 ```
+
+## Deploy (give your friend a real URL, ~15 min)
+
+The repo ships with a Dockerfile that pre-loads the 2025 season.
+
+**Railway** (easiest): push this folder to a GitHub repo → railway.app →
+New Project → Deploy from GitHub. Add env vars: `ADMIN_KEY` (any secret),
+`MIN_PICKS=5`. Add the Postgres plugin and Railway sets `DATABASE_URL`
+automatically. Done — share the generated URL.
+
+**Fly.io**: `fly launch` in this folder, accept the Dockerfile, then
+`fly secrets set ADMIN_KEY=yoursecret` and `fly deploy`.
+
+In-season cron (Railway cron job or GitHub Action, Tuesdays):
+`python weekly_update.py 2026` — refreshes scores and grades pending picks.
+Add the odds-snapshot cadence from `loaders/real_data.py` to turn on CLV.
 
 ## Wire in your own system (you + your friend)
 
@@ -83,10 +105,17 @@ touched and (b) shows positive CLV, not just positive ROI.
 - **No payments/accounts yet** — the paid marketplace comes after the board
   has a real season of credibility. Trust first, monetize second.
 
-## Next build round (when you're back)
+## Done so far
 
-1. Load real 2025 schedule + an odds archive; rerun backtests on real games.
-2. Deploy (Fly.io / Railway — one Dockerfile away) so your friend can hit it.
-3. `/admin/grade` behind an admin key + cron.
-4. Data explorer UI (line movement charts, situational filters).
-5. Then and only then: subscriptions.
+- v0: platform, trust rules, backtest loop, report cards, agent stub
+- v1.2: data explorer (/explorer) with real situational trends, ONBOARDING.md, Elo baseline system
+- v1: real 2025 season loaded (272 games, real closing lines), 472-pick
+  real backtest validated, ADMIN_KEY + DATABASE_URL env config, Dockerfile,
+  weekly update script
+
+## Next build round
+
+1. Deploy (instructions above) and have both real systems submit to the URL.
+2. In-season: odds-snapshot cron (loaders/real_data.py) → real CLV.
+3. In-season line movement charts in the explorer (needs multi-snapshot data).
+4. Then and only then: subscriptions.

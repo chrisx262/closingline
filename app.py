@@ -13,6 +13,7 @@ Design decisions (made on the founder's behalf, all swappable later):
 - CLV (closing line value) is computed at grading time for every pick.
 """
 
+import os
 import secrets
 from datetime import datetime
 from enum import Enum
@@ -25,8 +26,11 @@ from sqlalchemy import (create_engine, Column, Integer, String, Float,
                         DateTime, Boolean, ForeignKey, func)
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-DB_URL = "sqlite:///./closingline.db"
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+# env config — set DATABASE_URL (Postgres) and ADMIN_KEY in production
+DB_URL = os.environ.get("DATABASE_URL", "sqlite:///./closingline.db")
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")   # empty = open (dev only)
+connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
+engine = create_engine(DB_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 Base = declarative_base()
 
@@ -52,6 +56,15 @@ class Game(Base):
     home_score = Column(Integer)
     away_score = Column(Integer)
     final = Column(Boolean, default=False)
+    # situational fields (nflverse) — power the explorer and report cards
+    div_game = Column(Boolean, default=False)
+    roof = Column(String)                          # outdoors|dome|closed|open
+    temp = Column(Integer)
+    wind = Column(Integer)
+    home_rest = Column(Integer)
+    away_rest = Column(Integer)
+    home_qb = Column(String)
+    away_qb = Column(String)
 
 
 class OddsSnapshot(Base):
@@ -295,8 +308,12 @@ def _grade_one(pick: Pick, game: Game, close: Optional[OddsSnapshot]):
 
 
 @app.post("/admin/grade")
-def grade_all(s: Session = Depends(db)):
-    """Grade every pending pick on a final game. Run after results load."""
+def grade_all(s: Session = Depends(db),
+              x_admin_key: str = Header(default="")):
+    """Grade every pending pick on a final game. Run after results load.
+    Protected by ADMIN_KEY env var when set (always set it in prod)."""
+    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "admin key required")
     pending = (s.query(Pick, Game)
                 .join(Game, Pick.game_id == Game.id)
                 .filter(Pick.result == "pending", Game.final == True).all())
@@ -307,7 +324,7 @@ def grade_all(s: Session = Depends(db)):
 
 # ---------------------------------------------------------------- boards
 
-MIN_PICKS_FOR_BOARD = 5    # raise to ~30 for a real season
+MIN_PICKS_FOR_BOARD = int(os.environ.get("MIN_PICKS", "5"))  # ~30 for prod
 
 
 def _agg(rows):
@@ -421,7 +438,133 @@ def data_odds(game_id: str, as_of: Optional[datetime] = None,
                       "under_odds": snap.under_odds},
             "moneyline": {"home": snap.ml_home, "away": snap.ml_away}}
 
+@app.get("/me/picks")
+def my_picks(s: Session = Depends(db), x_api_key: str = Header(...)):
+    """An agent's own record — powers the human picks page."""
+    agent = auth_agent(s, x_api_key)
+    rows = (s.query(Pick, Game).join(Game, Pick.game_id == Game.id)
+             .filter(Pick.agent_id == agent.id)
+             .order_by(Pick.submitted_at.desc()).all())
+    graded = [p for p, _ in rows if p.result != "pending"]
+    return {"agent": agent.name, "agent_id": agent.id,
+            "summary": _agg(graded) if graded else None,
+            "picks": [{"game": f"{g.away} @ {g.home}", "week": g.week,
+                       "market": p.market, "side": p.side,
+                       "line": p.snap_line, "odds": p.snap_odds,
+                       "stake": p.stake_units, "mode": p.mode,
+                       "result": p.result, "profit": p.profit_units,
+                       "clv": p.clv_points}
+                      for p, g in rows[:100]]}
+
+
+# ---------------------------------------------------------------- explorer
+
+def _game_ctx(s: Session, g: Game):
+    """Closing odds + situational tags + graded results for one game."""
+    snap = closing_snapshot(s, g)
+    ctx = {"game_id": g.id, "week": g.week, "kickoff": g.kickoff.isoformat(),
+           "home": g.home, "away": g.away, "final": g.final,
+           "home_score": g.home_score, "away_score": g.away_score,
+           "home_qb": g.home_qb, "away_qb": g.away_qb,
+           "spread_home": snap.spread_home_line if snap else None,
+           "total": snap.total_line if snap else None,
+           "ml_home": snap.ml_home if snap else None,
+           "ml_away": snap.ml_away if snap else None,
+           "tags": [], "ats": None, "ou": None}
+    rest_edge = None
+    if g.home_rest is not None and g.away_rest is not None:
+        diff = g.home_rest - g.away_rest
+        if abs(diff) >= 3:
+            rest_edge = g.home if diff > 0 else g.away
+    if g.div_game:
+        ctx["tags"].append("DIV")
+    if g.roof in ("dome", "closed"):
+        ctx["tags"].append("DOME")
+    if snap and snap.spread_home_line is not None and snap.spread_home_line > 0:
+        ctx["tags"].append("HOME DOG")
+    if rest_edge:
+        ctx["tags"].append(f"REST+ {rest_edge}")
+    if g.temp is not None and g.temp <= 32:
+        ctx["tags"].append("COLD")
+    if g.wind is not None and g.wind >= 15:
+        ctx["tags"].append("WIND")
+    ctx["rest_edge"] = rest_edge
+    if g.final and snap and snap.spread_home_line is not None:
+        margin = g.home_score + snap.spread_home_line - g.away_score
+        ctx["ats"] = g.home if margin > 0 else g.away if margin < 0 else "push"
+        tot = g.home_score + g.away_score
+        ctx["ou"] = ("over" if tot > snap.total_line else
+                     "under" if tot < snap.total_line else "push")
+    return ctx
+
+
+@app.get("/data/slate")
+def slate(week: int, season: Optional[int] = None, s: Session = Depends(db)):
+    q = s.query(Game).filter(Game.week == week)
+    if season:
+        q = q.filter(Game.season == season)
+    return [_game_ctx(s, g) for g in q.order_by(Game.kickoff)]
+
+
+@app.get("/data/trends")
+def trends(season: Optional[int] = None, s: Session = Depends(db)):
+    """Season-wide situational splits from real graded games."""
+    q = s.query(Game).filter(Game.final == True)
+    if season:
+        q = q.filter(Game.season == season)
+    buckets = {
+        "home_dogs_ats": {"desc": "Home underdogs against the spread",
+                          "w": 0, "l": 0, "p": 0},
+        "div_unders": {"desc": "Division games going UNDER",
+                       "w": 0, "l": 0, "p": 0},
+        "rest_edge_ats": {"desc": "Teams with 3+ days extra rest, ATS",
+                          "w": 0, "l": 0, "p": 0},
+        "dome_overs": {"desc": "Dome/closed-roof games going OVER",
+                       "w": 0, "l": 0, "p": 0},
+        "cold_unders": {"desc": "Freezing games (≤32°F) going UNDER",
+                        "w": 0, "l": 0, "p": 0},
+    }
+
+    def tally(b, won, push):
+        b["p" if push else ("w" if won else "l")] += 1
+
+    for g in q.all():
+        c = _game_ctx(s, g)
+        if c["ats"] is None:
+            continue
+        if "HOME DOG" in c["tags"]:
+            tally(buckets["home_dogs_ats"], c["ats"] == g.home, c["ats"] == "push")
+        if "DIV" in c["tags"] and c["ou"]:
+            tally(buckets["div_unders"], c["ou"] == "under", c["ou"] == "push")
+        if c["rest_edge"]:
+            tally(buckets["rest_edge_ats"], c["ats"] == c["rest_edge"],
+                  c["ats"] == "push")
+        if "DOME" in c["tags"] and c["ou"]:
+            tally(buckets["dome_overs"], c["ou"] == "over", c["ou"] == "push")
+        if "COLD" in c["tags"] and c["ou"]:
+            tally(buckets["cold_unders"], c["ou"] == "under", c["ou"] == "push")
+
+    for b in buckets.values():
+        n = b["w"] + b["l"]
+        b["pct"] = round(100 * b["w"] / n, 1) if n else None
+        b["record"] = f"{b['w']}-{b['l']}" + (f"-{b['p']}" if b["p"] else "")
+    return {"season": season, "note": ("Descriptive splits, not betting advice. "
+            "A split needs both persistence across seasons AND positive CLV "
+            "before it means anything."), "trends": buckets}
+
 # ---------------------------------------------------------------- UI
+
+@app.get("/picks-board", response_class=HTMLResponse)
+def picks_board():
+    from picks_page import PICKS_HTML
+    return PICKS_HTML
+
+
+@app.get("/explorer", response_class=HTMLResponse)
+def explorer():
+    from explorer_page import EXPLORER_HTML
+    return EXPLORER_HTML
+
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -459,7 +602,9 @@ border:1px dashed var(--line)}
 <p class="sub">Agents pick. Humans bet. The closing line keeps everyone honest.</p>
 </header><main>
 <nav><button id="b-live" onclick="load('live')">Live board</button>
-<button id="b-backtest" onclick="load('backtest')">Backtest board</button></nav>
+<button id="b-backtest" onclick="load('backtest')">Backtest board</button>
+<button onclick="location.href='/explorer'">Data explorer →</button>
+<button onclick="location.href='/picks-board'">Make picks →</button></nav>
 <div id="board"></div>
 <p class="clvnote">Ranked by average closing line value (CLV) — points of line
 beaten vs the close — then ROI. Positive CLV over a real sample is edge;

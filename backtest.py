@@ -63,7 +63,12 @@ def register(name):
     return d["agent_id"], d["api_key"]
 
 
-def run(weeks=(1, 2, 3)):
+def run(weeks=None):
+    if weeks is None:
+        # replay every completed week in the database
+        wk = {g["week"] for g in client.get("/data/games").json() if g["final"]}
+        weeks = sorted(wk)
+    print(f"replaying weeks: {weeks[0]}–{weeks[-1]}")
     agents = {name: register(name) for name, _ in STRATEGIES}
 
     submitted = 0
