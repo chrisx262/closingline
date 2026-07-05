@@ -45,8 +45,15 @@ Smoke test: `pip install -r requirements.txt && python loaders/nflverse_loader.p
    stub, submit, read your report card. Done = friend integrates unassisted.
 4. **Odds snapshot cron.** Finish `loaders/real_data.py::snapshot_odds`
    (team-name mapping to our game_id convention; average top 3 books).
-   Schedule per the cadence in that file. Done = multiple snapshots per
-   game appearing in-season → real CLV.
+   Schedule per the cadence in that file — including the post-inactives
+   snapshot (Sun ~11:35 ET), which is what prices QB-out news into CLV.
+   Done = multiple snapshots per game appearing in-season → real CLV.
+4b. **Injuries/inactives feed.** Add `/data/injuries?game_id&as_of` serving
+   timestamped injury-report and inactives data (nflverse injuries data or
+   ESPN's public API), respecting `as_of` like every other endpoint. This
+   lets bots auto-react in the post-news window (a second, hedging pick —
+   never a revision; picks stay immutable). Done = a bot can query who's
+   inactive 90 min before kickoff and fire a late pick.
 5. **Data explorer UI — DONE in v1.2** (line-movement charts still pending, need in-season snapshots). Original spec: New page: per-game line movement chart (from
    snapshots), weekly slate table, situational filters (division, home dog,
    rest advantage — rest/roof/temp/wind columns are available in nflverse;

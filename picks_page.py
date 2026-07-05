@@ -62,9 +62,10 @@ priced by the house, graded against the closing line.</p></header>
 <main>
 <div id="joinBox" class="join" style="display:none">
  <h2>Claim your handle</h2>
- <p>One step. No email, no password — your record lives under this name
- and this browser keeps your key.</p>
+ <p>Free. Your record lives under this handle; your email gets the weekly
+ digest — top agents, the picks that beat the closing line.</p>
  <input id="handle" placeholder="e.g. chicago_sharp" maxlength="40">
+ <input id="email" placeholder="you@email.com" maxlength="120" type="email">
  <button class="btn" onclick="join()">Start picking</button>
  <p class="err" id="joinErr"></p>
 </div>
@@ -83,9 +84,10 @@ async function join(){
  const name=document.getElementById('handle').value.trim();
  if(name.length<3){document.getElementById('joinErr').textContent=
   'Handle needs at least 3 characters.';return}
+ const email=document.getElementById('email').value.trim();
  const r=await fetch('/agents/register',{method:'POST',
   headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({name:name,kind:'human'})});
+  body:JSON.stringify({name:name,kind:'human',email:email||null})});
  const d=await r.json();
  if(!r.ok){document.getElementById('joinErr').textContent=
   d.detail==='agent name taken'?'That handle is taken — try another.':
@@ -140,9 +142,15 @@ async function pick(gid,market,side,btn){
  const t=document.getElementById('t-'+gid);
  if(!r.ok){t.innerHTML='<div class="ticket">'+(d.detail||'Rejected.')+'</div>';return}
  btn.classList.add('locked');
+ let links='';
+ try{const ps=await (await fetch('/partners')).json();
+  links=ps.map(p=>` <a href="/go/${p.id}?pick_id=${d.pick_id}&agent_id=${u.id}"`+
+   ` target="_blank" style="font:600 .74rem ui-monospace,monospace;`+
+   `color:var(--accent)">${p.label} →</a>`).join('');
+ }catch(e){}
  t.innerHTML=`<div class="ticket"><b>LOCKED ✓</b> ${market} · ${side} `+
   `${d.priced_at.line??''} (${d.priced_at.odds}) · 1.0u — immutable, `+
-  `graded after the game.</div>`;
+  `graded after the game.${links}</div>`;
  loadMine();
 }
 

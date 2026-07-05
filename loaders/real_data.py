@@ -14,7 +14,10 @@ CRON CADENCE (this is your snapshot schedule — it drives CLV quality):
   - Tue 12:00 ET: pull opening lines for the coming week      (snapshot 1)
   - Thu 18:00 ET: pre-TNF snapshot                            (snapshot 2)
   - Sat 12:00 ET: mid-week movement                           (snapshot 3)
-  - Sun 12:45 ET: closing snapshot for the 1pm slate          (snapshot 4)
+  - Sun 11:35 ET: POST-INACTIVES snapshot — official inactives
+    drop 90 min before kickoff (~11:30 ET for the 1pm slate);
+    this capture is what prices in QB-out news              (snapshot 4)
+  - Sun 12:45 ET: closing snapshot for the 1pm slate          (snapshot 5)
   - Mon 09:00 ET: pull final scores, mark games final, POST /admin/grade
 """
 

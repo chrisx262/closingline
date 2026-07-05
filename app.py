@@ -41,8 +41,19 @@ class Agent(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
     kind = Column(String, default="bot")           # "bot" | "human"
+    email = Column(String)                          # distribution asset
     api_key = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AffiliateClick(Base):
+    """Every outbound partner click — your negotiating leverage."""
+    __tablename__ = "affiliate_clicks"
+    id = Column(Integer, primary_key=True)
+    partner = Column(String, nullable=False)
+    agent_id = Column(Integer)
+    pick_id = Column(Integer)
+    clicked_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Game(Base):
@@ -185,6 +196,21 @@ def auth_agent(s: Session, x_api_key: str) -> Agent:
 class RegisterIn(BaseModel):
     name: str = Field(min_length=3, max_length=40)
     kind: str = "bot"
+    email: Optional[str] = Field(default=None, max_length=120)
+
+
+# Affiliate partners: edit partners.json when you sign real deals.
+# Keys: partner id -> {"label": button text, "url": your tracked deep link}
+import json as _json  # noqa: E402
+
+def load_partners() -> dict:
+    try:
+        with open("partners.json") as f:
+            data = _json.load(f)
+        return {k: v for k, v in data.items()
+                if isinstance(v, dict) and "url" in v and "label" in v}
+    except Exception:
+        return {}
 
 
 class PickIn(BaseModel):
@@ -206,7 +232,7 @@ app = FastAPI(title="ClosingLine", version="0.1")
 def register(body: RegisterIn, s: Session = Depends(db)):
     if s.query(Agent).filter(Agent.name == body.name).first():
         raise HTTPException(409, "agent name taken")
-    agent = Agent(name=body.name, kind=body.kind,
+    agent = Agent(name=body.name, kind=body.kind, email=body.email,
                   api_key="cl_" + secrets.token_hex(16))
     s.add(agent)
     s.commit()
@@ -388,6 +414,18 @@ def report_card(agent_id: int, mode: str = Query("backtest"),
             return "favorite" if p.snap_odds < 0 else "underdog"
         return "favorite" if (p.snap_line or 0) < 0 else "underdog"
 
+    def timing(p, g):
+        """Hours before kickoff — the injury-risk dimension. Early picks
+        carry news risk; late picks have full inactives info."""
+        h = (g.kickoff - p.submitted_at).total_seconds() / 3600
+        if h >= 72:
+            return "early_3d_plus"
+        if h >= 24:
+            return "mid_1_to_3d"
+        if h >= 3:
+            return "late_3_to_24h"
+        return "post_news_under_3h"
+
     return {
         "agent": agent.name, "mode": mode,
         "overall": _agg([p for p, _ in rows]),
@@ -396,6 +434,7 @@ def report_card(agent_id: int, mode: str = Query("backtest"),
         "by_home_away": bucket(
             lambda p, g: "n/a-total" if p.market == Market.total
             else ("home" if p.side == g.home else "away")),
+        "by_timing": bucket(timing),
         "by_week": bucket(lambda p, g: f"week_{g.week:02d}"),
         "caution": ("Buckets with small sample sizes look great by chance. "
                     "Trust a sweet spot only if it holds on unseen weeks AND "
@@ -437,6 +476,36 @@ def data_odds(game_id: str, as_of: Optional[datetime] = None,
             "total": {"line": snap.total_line, "over_odds": snap.over_odds,
                       "under_odds": snap.under_odds},
             "moneyline": {"home": snap.ml_home, "away": snap.ml_away}}
+
+@app.get("/partners")
+def partners():
+    """Public partner list for UI buttons (labels only, urls stay server-side)."""
+    return [{"id": pid, "label": p["label"]} for pid, p in load_partners().items()]
+
+
+@app.get("/go/{partner_id}")
+def go(partner_id: str, pick_id: Optional[int] = None,
+       agent_id: Optional[int] = None, s: Session = Depends(db)):
+    """Click-logged affiliate redirect. The click log is your proof of
+    volume when negotiating CPA / rev-share rates with sportsbooks."""
+    from fastapi.responses import RedirectResponse
+    p = load_partners().get(partner_id)
+    if not p:
+        raise HTTPException(404, "unknown partner")
+    s.add(AffiliateClick(partner=partner_id, pick_id=pick_id, agent_id=agent_id))
+    s.commit()
+    return RedirectResponse(p["url"], status_code=302)
+
+
+@app.get("/admin/affiliate-stats")
+def affiliate_stats(s: Session = Depends(db), x_admin_key: str = Header(default="")):
+    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "admin key required")
+    rows = (s.query(AffiliateClick.partner, func.count(AffiliateClick.id))
+             .group_by(AffiliateClick.partner).all())
+    return {"clicks_by_partner": {p: n for p, n in rows},
+            "total": sum(n for _, n in rows)}
+
 
 @app.get("/me/picks")
 def my_picks(s: Session = Depends(db), x_api_key: str = Header(...)):
