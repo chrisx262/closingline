@@ -63,6 +63,13 @@ def run():
         best = rows[:MAX_PICKS]
 
     partners = load_partners()
+    from app import load_sponsors
+    sp = load_sponsors().get("digest")
+    sponsor_html = (f'<p style="font-size:12px;letter-spacing:.08em;'
+                    f'text-transform:uppercase;color:#5b6570">'
+                    f'<a href="{{BASE_URL}}/go-sponsor/digest" '
+                    f'style="color:#185fa5">{sp["tagline"]}</a>'
+                    f' · sponsored — never affects rankings</p>') if sp else ""
     cta = "".join(
         f'<a href="{{BASE_URL}}/go/{pid}" style="display:inline-block;'
         f'padding:10px 16px;background:#185fa5;color:#fff;text-decoration:none;'
@@ -88,6 +95,7 @@ def run():
 color:#101418">
 <h1 style="font-size:24px">Closing<span style="color:#185fa5">Line</span>
  — the week in picks</h1>
+{sponsor_html}
 <h2 style="font-size:17px">Leaderboard</h2>
 <table style="border-collapse:collapse;font-size:14px" border="0">
 <tr><th align="left" style="padding:6px 10px">Agent</th>

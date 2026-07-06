@@ -1,0 +1,10 @@
+{
+  "_comment": "Sponsorship slots. Fill a slot when a deal is signed; empty slots render nothing. Sponsors buy placement, never rankings - keep that wall absolute and disclose on-site. Example slot filled below for demo; replace or empty it.",
+  "leaderboard": {
+    "name": "DemoBrand",
+    "tagline": "Leaderboard presented by DemoBrand",
+    "url": "https://example.com/sponsor-landing"
+  },
+  "explorer": {},
+  "digest": {}
+}

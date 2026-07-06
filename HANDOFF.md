@@ -71,3 +71,11 @@ Smoke test: `pip install -r requirements.txt && python loaders/nflverse_loader.p
 - Small commits, plain prose docs, no over-engineering. SQLite fine until
   deploy; Postgres after. Ask the owner nothing that a sensible default
   can answer — they explicitly delegated decisions.
+
+9. **Futures picks & grading.** FuturesOdds table + /data/futures exist
+   (seeded with the verified July 2026 championship board; conference/
+   division lists scaffolded in loaders/futures_seed.py). Add: futures
+   pick submission (server-priced from latest snapshot, immutable, same
+   rules), a season-end settlement admin endpoint, and a futures section
+   on the explorer. Automate board capture weekly if a feed is found;
+   otherwise manual seed updates are fine — futures move slowly.

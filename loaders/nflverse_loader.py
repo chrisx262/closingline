@@ -21,6 +21,7 @@ import csv
 import io
 import sys
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -28,6 +29,13 @@ sys.path.insert(0, ".")
 from app import SessionLocal, Base, engine, Game, OddsSnapshot  # noqa: E402
 
 URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+ET = ZoneInfo("America/New_York")
+
+
+def to_utc(gameday: str, gametime: str) -> datetime:
+    """nflverse times are US Eastern; the platform clock is UTC (naive)."""
+    local = datetime.fromisoformat(f"{gameday}T{gametime}").replace(tzinfo=ET)
+    return local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
 
 def load(seasons: list[int], wipe: bool = False):
@@ -49,8 +57,8 @@ def load(seasons: list[int], wipe: bool = False):
             continue
 
         gameday = row["gameday"]
-        gametime = row.get("gametime") or "17:00"
-        kickoff = datetime.fromisoformat(f"{gameday}T{gametime}")
+        gametime = row.get("gametime") or "13:00"
+        kickoff = to_utc(gameday, gametime)
 
         gid = (f"{row['season']}_W{int(row['week']):02d}_"
                f"{row['away_team']}_{row['home_team']}")
@@ -75,6 +83,11 @@ def load(seasons: list[int], wipe: bool = False):
 
         # nflverse convention: spread_line positive = home favored by that many
         # our convention:      spread_home_line negative = home favored
+        # Only create the initial snapshot pair; once a game has snapshots,
+        # the in-season odds cron owns updates (no duplicates on rerun).
+        if s.query(OddsSnapshot).filter(OddsSnapshot.game_id == gid).count():
+            loaded += 1
+            continue
         home_line = -float(row["spread_line"])
         common = dict(
             game_id=gid,

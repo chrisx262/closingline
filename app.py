@@ -13,6 +13,8 @@ Design decisions (made on the founder's behalf, all swappable later):
 - CLV (closing line value) is computed at grading time for every pick.
 """
 
+import hashlib
+import hmac
 import os
 import secrets
 from datetime import datetime
@@ -44,6 +46,21 @@ class Agent(Base):
     email = Column(String)                          # distribution asset
     api_key = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FuturesOdds(Base):
+    """Season-long markets: championship, conference, division winners.
+    One row per (market, team) per capture — same snapshot philosophy
+    as game odds, so futures CLV works the same way."""
+    __tablename__ = "futures_odds"
+    id = Column(Integer, primary_key=True)
+    season = Column(Integer, nullable=False)
+    market = Column(String, nullable=False)   # championship | conference:AFC |
+                                              # conference:NFC | division:AFC East ...
+    team = Column(String, nullable=False)
+    odds = Column(Integer, nullable=False)    # American
+    book = Column(String)
+    captured_at = Column(DateTime, nullable=False)
 
 
 class AffiliateClick(Base):
@@ -185,8 +202,14 @@ def price_from_snapshot(snap: OddsSnapshot, game: Game, market: str, side: str):
     raise HTTPException(400, "unknown market")
 
 
+def _key_hash(raw: str) -> str:
+    """API keys are stored as SHA-256 digests. High-entropy random keys
+    don't need salting; a DB leak exposes nothing usable."""
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def auth_agent(s: Session, x_api_key: str) -> Agent:
-    agent = s.query(Agent).filter(Agent.api_key == x_api_key).first()
+    agent = s.query(Agent).filter(Agent.api_key == _key_hash(x_api_key)).first()
     if not agent:
         raise HTTPException(401, "invalid API key")
     return agent
@@ -232,12 +255,13 @@ app = FastAPI(title="ClosingLine", version="0.1")
 def register(body: RegisterIn, s: Session = Depends(db)):
     if s.query(Agent).filter(Agent.name == body.name).first():
         raise HTTPException(409, "agent name taken")
+    raw_key = "cl_" + secrets.token_hex(16)
     agent = Agent(name=body.name, kind=body.kind, email=body.email,
-                  api_key="cl_" + secrets.token_hex(16))
+                  api_key=_key_hash(raw_key))
     s.add(agent)
     s.commit()
-    return {"agent_id": agent.id, "name": agent.name, "api_key": agent.api_key,
-            "note": "Store this key. It is shown once."}
+    return {"agent_id": agent.id, "name": agent.name, "api_key": raw_key,
+            "note": "Store this key. It is shown once and not recoverable."}
 
 
 @app.post("/picks")
@@ -338,7 +362,7 @@ def grade_all(s: Session = Depends(db),
               x_admin_key: str = Header(default="")):
     """Grade every pending pick on a final game. Run after results load.
     Protected by ADMIN_KEY env var when set (always set it in prod)."""
-    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+    if ADMIN_KEY and not hmac.compare_digest(x_admin_key, ADMIN_KEY):
         raise HTTPException(403, "admin key required")
     pending = (s.query(Pick, Game)
                 .join(Game, Pick.game_id == Game.id)
@@ -477,6 +501,34 @@ def data_odds(game_id: str, as_of: Optional[datetime] = None,
                       "under_odds": snap.under_odds},
             "moneyline": {"home": snap.ml_home, "away": snap.ml_away}}
 
+def load_sponsors() -> dict:
+    try:
+        with open("sponsors.json") as f:
+            data = _json.load(f)
+        return {k: v for k, v in data.items()
+                if isinstance(v, dict) and v.get("url") and v.get("tagline")}
+    except Exception:
+        return {}
+
+
+@app.get("/sponsors")
+def sponsors():
+    """Filled slots only — taglines for the UI; URLs stay server-side."""
+    return {slot: {"tagline": v["tagline"]}
+            for slot, v in load_sponsors().items()}
+
+
+@app.get("/go-sponsor/{slot}")
+def go_sponsor(slot: str, s: Session = Depends(db)):
+    from fastapi.responses import RedirectResponse
+    v = load_sponsors().get(slot)
+    if not v:
+        raise HTTPException(404, "no sponsor in this slot")
+    s.add(AffiliateClick(partner=f"sponsor:{slot}"))
+    s.commit()
+    return RedirectResponse(v["url"], status_code=302)
+
+
 @app.get("/partners")
 def partners():
     """Public partner list for UI buttons (labels only, urls stay server-side)."""
@@ -499,7 +551,7 @@ def go(partner_id: str, pick_id: Optional[int] = None,
 
 @app.get("/admin/affiliate-stats")
 def affiliate_stats(s: Session = Depends(db), x_admin_key: str = Header(default="")):
-    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+    if ADMIN_KEY and not hmac.compare_digest(x_admin_key, ADMIN_KEY):
         raise HTTPException(403, "admin key required")
     rows = (s.query(AffiliateClick.partner, func.count(AffiliateClick.id))
              .group_by(AffiliateClick.partner).all())
@@ -524,6 +576,30 @@ def my_picks(s: Session = Depends(db), x_api_key: str = Header(...)):
                        "result": p.result, "profit": p.profit_units,
                        "clv": p.clv_points}
                       for p, g in rows[:100]]}
+
+
+@app.get("/data/futures")
+def data_futures(season: int, market: Optional[str] = None,
+                 as_of: Optional[datetime] = None, s: Session = Depends(db)):
+    """Point-in-time futures board. Returns each team's most recent odds
+    at or before as_of, per market."""
+    at = as_of or datetime.utcnow()
+    q = (s.query(FuturesOdds)
+          .filter(FuturesOdds.season == season, FuturesOdds.captured_at <= at))
+    if market:
+        q = q.filter(FuturesOdds.market == market)
+    latest = {}
+    for row in q.order_by(FuturesOdds.captured_at):
+        latest[(row.market, row.team)] = row       # later rows overwrite
+    boards = {}
+    for (m, team), row in latest.items():
+        boards.setdefault(m, []).append(
+            {"team": team, "odds": row.odds,
+             "implied_prob": round(implied_prob(row.odds), 4),
+             "book": row.book, "captured_at": row.captured_at.isoformat()})
+    for m in boards:
+        boards[m].sort(key=lambda r: r["odds"])
+    return {"season": season, "as_of": at.isoformat(), "markets": boards}
 
 
 # ---------------------------------------------------------------- explorer
@@ -674,6 +750,7 @@ border:1px dashed var(--line)}
 <button id="b-backtest" onclick="load('backtest')">Backtest board</button>
 <button onclick="location.href='/explorer'">Data explorer →</button>
 <button onclick="location.href='/picks-board'">Make picks →</button></nav>
+<div id="sponsorLine"></div>
 <div id="board"></div>
 <p class="clvnote">Ranked by average closing line value (CLV) — points of line
 beaten vs the close — then ROI. Positive CLV over a real sample is edge;
@@ -698,4 +775,11 @@ async function load(mode){
    (a.avg_clv_points===null?'—':a.avg_clv_points)+'</td></tr>'}
  el.innerHTML=h+'</table>'}
 load('backtest');
+fetch('/sponsors').then(r=>r.json()).then(sp=>{
+ if(sp.leaderboard){document.getElementById('sponsorLine').innerHTML=
+  '<p style="font:600 .7rem/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;'+
+  'text-transform:uppercase;color:var(--dim);margin:.2rem 0 .6rem">'+
+  '<a href="/go-sponsor/leaderboard" target="_blank" style="color:var(--accent);'+
+  'text-decoration:none">'+sp.leaderboard.tagline+'</a> · sponsored — never affects rankings</p>'}
+}).catch(()=>{});
 </script></body></html>"""
