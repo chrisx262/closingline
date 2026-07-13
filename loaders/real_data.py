@@ -21,12 +21,15 @@ CRON CADENCE (this is your snapshot schedule — it drives CLV quality):
   - Mon 09:00 ET: pull final scores, mark games final, POST /admin/grade
 """
 
+import os
 from datetime import datetime
 
 import requests
 from app import SessionLocal, Game, OddsSnapshot
 
-ODDS_API_KEY = ""  # <- paste key from the-odds-api.com
+# Read the key from the environment — never hardcode it in source (this repo
+# is public). Set ODDS_API_KEY in your shell or a local .env (git-ignored).
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds"
 SCHEDULE_CSV = ("https://github.com/nflverse/nflverse-data/releases/download/"
                 "schedules/sched_{season}.csv")
@@ -58,6 +61,13 @@ def load_schedule(season: int):
 def snapshot_odds():
     """Capture one odds snapshot for every upcoming game. Run on the cron
     cadence above. Each run = one OddsSnapshot row per game."""
+    if not ODDS_API_KEY:
+        raise RuntimeError(
+            "ODDS_API_KEY is not set. Get a key from https://the-odds-api.com "
+            "and export it before running, e.g.:\n"
+            "  export ODDS_API_KEY=your_key_here\n"
+            "or add it to a local .env file (git-ignored)."
+        )
     params = {"apiKey": ODDS_API_KEY, "regions": "us",
               "markets": "spreads,totals,h2h", "oddsFormat": "american"}
     r = requests.get(ODDS_URL, params=params, timeout=30)
