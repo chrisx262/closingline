@@ -1,9 +1,12 @@
 FROM python:3.12-slim
 WORKDIR /app
+# Stream logs immediately so Railway shows boot/seed output in real time.
+ENV PYTHONUNBUFFERED=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt psycopg2-binary
 COPY . .
-# Load the real completed season at build so the board isn't empty on day one.
-RUN python loaders/nflverse_loader.py 2025 || true
 EXPOSE 8000
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# boot.py seeds the 2025 season into the LIVE db on first start (if empty),
+# then launches uvicorn. Seeding at runtime — not build time — is what makes
+# the preload land in Postgres (DATABASE_URL) instead of a throwaway sqlite.
+CMD ["python", "boot.py"]
