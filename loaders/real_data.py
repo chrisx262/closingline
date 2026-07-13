@@ -27,6 +27,15 @@ from datetime import datetime
 import requests
 from app import SessionLocal, Game, OddsSnapshot
 
+# Auto-load a local .env (git-ignored) so the key is picked up seamlessly.
+# Optional dependency — if python-dotenv isn't installed, fall back to the
+# ambient environment.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Read the key from the environment — never hardcode it in source (this repo
 # is public). Set ODDS_API_KEY in your shell or a local .env (git-ignored).
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
