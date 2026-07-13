@@ -4,3 +4,4 @@ __pycache__/
 *.db
 .env
 .env.*
+.admin_key_SAVE_THIS.txt
