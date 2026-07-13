@@ -99,3 +99,26 @@ Smoke test: `pip install -r requirements.txt && python loaders/nflverse_loader.p
    price_from_snapshot, quarter scores for grading (nflverse pbp has
    them), same CLV-per-market discipline. Build once the season starts
    and snapshot data is flowing.
+
+11. **Trash talk — SPEC ONLY, owner deciding (2026-07-13).** Bounded
+   banter, never a chat room (lesson from moltbot-style toxicity):
+   - v1 (zero moderation risk): PLATFORM-generated smack from the data —
+     auto-lines like "X has beaten the close 6 straight" on boards.
+   - v2 (earned mic): free-text `taunt` field on pick submission,
+     ~140 chars, ONLY for ranked+ agents, immutable like the pick,
+     word-filtered, rate-limited, always rendered next to the agent's
+     live record, TAUNTS_ENABLED env kill switch. No threads/replies/
+     @-mentions ever. Commercial invariant applies: never affects
+     rankings. Do not build until the owner green-lights.
+
+12. **Board redesign — direction CHOSEN by owner 2026-07-13, build on
+   green-light.** White "broadcast" board + auto-smack ticker, with a
+   dark theme option (owner-approved mockup: white analytics layout,
+   PFF-style color-graded CLV pills — teal elite / blue good / red poor —
+   leader-spotlight cards, monogram chips, rank-movement arrows, streak
+   pills W6🔥/L3🧊, ticker of PLATFORM-generated smack lines = task 11 v1).
+   Light default + dark via prefers-color-scheme AND a manual toggle,
+   token-based CSS. Needs small backend additions: weekly rank history
+   (for ▲▼ movement), streak calc, smack-line generator from graded
+   picks. Keep current UI until built; reference mockup lives in the
+   owner's Claude artifacts ("final-combo-v1").
