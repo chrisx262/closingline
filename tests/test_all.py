@@ -122,5 +122,64 @@ from loaders.nflverse_loader import to_utc  # noqa: E402
 check("ET 13:00 Sept -> 17:00 UTC", to_utc("2025-09-07", "13:00").hour == 17)
 check("ET 13:00 Dec -> 18:00 UTC (DST)", to_utc("2025-12-07", "13:00").hour == 18)
 
+# --- odds snapshot (task 4): mapping, consensus, matching — no network --
+from loaders.real_data import TEAM_ABBR, _consensus, _match_game  # noqa: E402
+check("team map covers all 32 NFL teams", len(TEAM_ABBR) == 32
+      and len(set(TEAM_ABBR.values())) == 32)
+_event = {"home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills",
+          "bookmakers": [
+    {"key": "b1", "markets": [
+        {"key": "spreads", "outcomes": [
+            {"name": "Kansas City Chiefs", "point": -2.5, "price": -110},
+            {"name": "Buffalo Bills", "point": 2.5, "price": -110}]},
+        {"key": "totals", "outcomes": [
+            {"name": "Over", "point": 47.5, "price": -110},
+            {"name": "Under", "point": 47.5, "price": -110}]},
+        {"key": "h2h", "outcomes": [
+            {"name": "Kansas City Chiefs", "price": -140},
+            {"name": "Buffalo Bills", "price": 120}]}]},
+    {"key": "b2", "markets": [
+        {"key": "spreads", "outcomes": [
+            {"name": "Kansas City Chiefs", "point": -3.5, "price": -105},
+            {"name": "Buffalo Bills", "point": 3.5, "price": -115}]}]},
+]}
+_v = _consensus(_event)
+check("consensus averages books' spreads", _v["spread_home_line"] == -3.0)
+check("consensus rounds odds to int", _v["spread_home_odds"] == -108)
+check("consensus keeps single-book totals", _v["total_line"] == 47.5)
+check("consensus ml from book 1", _v["ml_home"] == -140)
+check("consensus None with no spread",
+      _consensus({"home_team": "x", "away_team": "y", "bookmakers": []}) is None)
+
+
+class _G:  # minimal stand-in for a Game row
+    def __init__(self, home, away, kickoff):
+        self.home, self.away, self.kickoff = home, away, kickoff
+
+
+_games = [_G("KC", "BUF", datetime(2025, 11, 2, 18, 0))]
+check("match same teams within 36h",
+      _match_game(_games, "KC", "BUF", datetime(2025, 11, 3, 1, 0)) is not None)
+check("no match beyond 36h",
+      _match_game(_games, "KC", "BUF", datetime(2025, 11, 8, 18, 0)) is None)
+check("no match wrong teams",
+      _match_game(_games, "PHI", "DAL", datetime(2025, 11, 2, 18, 0)) is None)
+
+# --- scheduler slot logic (task 4 cron) ---------------------------------
+import scheduler  # noqa: E402
+_tue = datetime(2025, 11, 4, 12, 3)        # a Tuesday, inside grace window
+check("tue 12:03 fires tue-open snapshot",
+      [j for _, j in scheduler.due_slots(_tue, set())] == ["snapshot"])
+check("slot never fires twice same day",
+      scheduler.due_slots(_tue, {f"tue-open:{_tue.date()}"}) == [])
+check("outside grace window fires nothing",
+      scheduler.due_slots(datetime(2025, 11, 4, 12, 20), set()) == [])
+check("sun 11:40 fires post-inactives snapshot",
+      [j for _, j in scheduler.due_slots(datetime(2025, 11, 9, 11, 40),
+                                         set())] == ["snapshot"])
+check("wednesday fires nothing",
+      scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
+check("scheduler off without RUN_SCHEDULER=1", scheduler.start() is False)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

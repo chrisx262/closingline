@@ -14,21 +14,28 @@ from app import SessionLocal, Base, engine, Game
 # Ensure tables exist on a fresh Postgres, then check if we need to seed.
 Base.metadata.create_all(engine)
 
+# 2026 matters as much as 2025: the odds cron matches snapshots against
+# these rows — without the coming season's schedule every snapshot goes
+# unmatched. Seeding is per-season so an already-seeded DB still picks up
+# a season it's missing (games merge by id, so this never duplicates).
+WANT_SEASONS = [2025, 2026]
+
 s = SessionLocal()
 try:
-    already_seeded = s.query(Game).count() > 0
+    have = {row[0] for row in s.query(Game.season).distinct()}
 finally:
     s.close()
 
-if already_seeded:
-    print("boot: DB already has games — skipping season preload")
+missing = [y for y in WANT_SEASONS if y not in have]
+if not missing:
+    print(f"boot: seasons {sorted(have)} present — skipping preload")
 else:
-    print("boot: empty DB — loading 2025 season ...")
+    print(f"boot: loading missing season(s) {missing} ...")
     from loaders.nflverse_loader import load
     try:
-        load([2025])
+        load(missing)
     except Exception as e:  # never block startup on a data-source hiccup
-        print(f"boot: season preload failed, starting with empty board: {e}")
+        print(f"boot: season preload failed, continuing anyway: {e}")
 
 # Railway injects $PORT; fall back to 8000 for local/dev.
 port = os.environ.get("PORT", "8000")

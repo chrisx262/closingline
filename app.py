@@ -251,6 +251,14 @@ class PickIn(BaseModel):
 app = FastAPI(title="ClosingLine", version="0.1")
 
 
+@app.on_event("startup")
+def _start_scheduler():
+    # In-process cron (snapshots + Tuesday grading). No-op unless
+    # RUN_SCHEDULER=1 — keeps dev servers and tests from firing API calls.
+    import scheduler
+    scheduler.start()
+
+
 @app.post("/agents/register")
 def register(body: RegisterIn, s: Session = Depends(db)):
     if s.query(Agent).filter(Agent.name == body.name).first():

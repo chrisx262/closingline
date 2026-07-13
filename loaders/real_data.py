@@ -67,9 +67,83 @@ def load_schedule(season: int):
     print("schedule loaded")
 
 
+# The Odds API returns full names; games use nflverse abbreviations
+# (note: LA = Rams, WAS = Commanders).
+TEAM_ABBR = {
+    "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL",
+    "Baltimore Ravens": "BAL", "Buffalo Bills": "BUF",
+    "Carolina Panthers": "CAR", "Chicago Bears": "CHI",
+    "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE",
+    "Dallas Cowboys": "DAL", "Denver Broncos": "DEN",
+    "Detroit Lions": "DET", "Green Bay Packers": "GB",
+    "Houston Texans": "HOU", "Indianapolis Colts": "IND",
+    "Jacksonville Jaguars": "JAX", "Kansas City Chiefs": "KC",
+    "Los Angeles Rams": "LA", "Los Angeles Chargers": "LAC",
+    "Las Vegas Raiders": "LV", "Miami Dolphins": "MIA",
+    "Minnesota Vikings": "MIN", "New England Patriots": "NE",
+    "New Orleans Saints": "NO", "New York Giants": "NYG",
+    "New York Jets": "NYJ", "Philadelphia Eagles": "PHI",
+    "Pittsburgh Steelers": "PIT", "Seattle Seahawks": "SEA",
+    "San Francisco 49ers": "SF", "Tampa Bay Buccaneers": "TB",
+    "Tennessee Titans": "TEN", "Washington Commanders": "WAS",
+}
+
+TOP_BOOKS = 3  # consensus = average of the first N books carrying a market
+
+
+def _consensus(event: dict) -> dict | None:
+    """Average the first TOP_BOOKS books' spread/total/h2h for one event.
+    Returns OddsSnapshot field values, or None if no book has a spread."""
+    home, away = event["home_team"], event["away_team"]
+    fields = {"spread_home_line": [], "spread_home_odds": [],
+              "spread_away_odds": [], "total_line": [], "over_odds": [],
+              "under_odds": [], "ml_home": [], "ml_away": []}
+    for book in event.get("bookmakers", [])[:TOP_BOOKS]:
+        markets = {m["key"]: m["outcomes"] for m in book.get("markets", [])}
+        for o in markets.get("spreads", []):
+            if o["name"] == home:
+                fields["spread_home_line"].append(o["point"])
+                fields["spread_home_odds"].append(o["price"])
+            elif o["name"] == away:
+                fields["spread_away_odds"].append(o["price"])
+        for o in markets.get("totals", []):
+            if o["name"] == "Over":
+                fields["total_line"].append(o["point"])
+                fields["over_odds"].append(o["price"])
+            elif o["name"] == "Under":
+                fields["under_odds"].append(o["price"])
+        for o in markets.get("h2h", []):
+            if o["name"] == home:
+                fields["ml_home"].append(o["price"])
+            elif o["name"] == away:
+                fields["ml_away"].append(o["price"])
+    if not fields["spread_home_line"]:
+        return None
+    out = {}
+    for k, vals in fields.items():
+        if not vals:
+            continue
+        avg = sum(vals) / len(vals)
+        # lines keep halves (e.g. -3.5); odds round to whole american prices
+        out[k] = round(avg * 2) / 2 if k.endswith("_line") else int(round(avg))
+    return out
+
+
+def _match_game(games: list, home_abbr: str, away_abbr: str,
+                commence: datetime):
+    """Find the Game row for an event: same home/away, kickoff within 36h
+    of the event's commence time (absorbs feed-vs-schedule drift)."""
+    for g in games:
+        if (g.home == home_abbr and g.away == away_abbr
+                and abs((g.kickoff - commence).total_seconds()) <= 36 * 3600):
+            return g
+    return None
+
+
 def snapshot_odds():
     """Capture one odds snapshot for every upcoming game. Run on the cron
-    cadence above. Each run = one OddsSnapshot row per game."""
+    cadence above. One call covers ALL games and costs 3 credits (markets x
+    regions) — the 5/week cadence is ~66 credits/month vs the free 500."""
     if not ODDS_API_KEY:
         raise RuntimeError(
             "ODDS_API_KEY is not set. Get a key from https://the-odds-api.com "
@@ -81,15 +155,32 @@ def snapshot_odds():
               "markets": "spreads,totals,h2h", "oddsFormat": "american"}
     r = requests.get(ODDS_URL, params=params, timeout=30)
     r.raise_for_status()
+    remaining = r.headers.get("x-requests-remaining")
     now = datetime.utcnow()
     s = SessionLocal()
+    games = s.query(Game).filter(Game.final == False).all()  # noqa: E712
+    captured = unmatched = 0
     for event in r.json():
-        # TODO: map event home/away team names -> your Game.id convention,
-        # average or pick one book from event["bookmakers"], then:
-        # s.add(OddsSnapshot(game_id=..., captured_at=now, ...))
-        pass
+        home = TEAM_ABBR.get(event.get("home_team", ""))
+        away = TEAM_ABBR.get(event.get("away_team", ""))
+        if not home or not away:
+            continue  # non-NFL or unrecognized name
+        commence = datetime.fromisoformat(
+            event["commence_time"].replace("Z", "+00:00")).replace(tzinfo=None)
+        game = _match_game(games, home, away, commence)
+        if game is None:
+            unmatched += 1
+            continue
+        vals = _consensus(event)
+        if vals is None:
+            continue
+        s.add(OddsSnapshot(game_id=game.id, captured_at=now, **vals))
+        captured += 1
     s.commit()
     s.close()
+    print(f"snapshot_odds: {captured} games captured, {unmatched} unmatched, "
+          f"API requests remaining this month: {remaining}")
+    return captured
 
 
 if __name__ == "__main__":
