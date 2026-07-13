@@ -122,6 +122,7 @@ class Pick(Base):
     confidence = Column(Float)
     model_version = Column(String)
     mode = Column(String, default="live")          # live | backtest
+    best_bet = Column(Boolean, default=False)      # agent's pick-of-the-slate-day
     submitted_at = Column(DateTime, nullable=False)
     # server-stamped price at submission:
     snap_line = Column(Float)                      # from the picker's perspective
@@ -136,6 +137,22 @@ class Pick(Base):
 
 
 Base.metadata.create_all(engine)
+
+
+def _migrate_additive():
+    """create_all never ALTERs existing tables — add new columns by hand.
+    Safe to run every boot: fails silently once the column exists."""
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE picks ADD COLUMN best_bet BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+    except Exception:
+        pass
+
+
+_migrate_additive()
 
 # ---------------------------------------------------------------- helpers
 
@@ -245,6 +262,15 @@ class PickIn(BaseModel):
     model_version: Optional[str] = None
     mode: str = "live"                        # backtest requires as_of
     as_of: Optional[datetime] = None          # backtest replay clock
+    best_bet: bool = False                    # pick-of-the-slate-day, max 1/day
+
+
+def _slate_date(kickoff_utc: datetime):
+    """The betting 'day' of a game = its kickoff date in US Eastern.
+    (A Sunday-night game kicks off Monday 00:20 UTC but is a Sunday bet.)"""
+    from zoneinfo import ZoneInfo
+    return (kickoff_utc.replace(tzinfo=ZoneInfo("UTC"))
+            .astimezone(ZoneInfo("America/New_York")).date())
 
 # ---------------------------------------------------------------- app
 
@@ -298,16 +324,28 @@ def submit_pick(body: PickIn, s: Session = Depends(db),
     if not snap:
         raise HTTPException(409, "no odds available yet for this game")
 
+    if body.best_bet:
+        # one best bet per agent per slate day (per mode). Declared at
+        # submission and immutable like everything else — no retroactive
+        # flagging, no cherry-picking.
+        day = _slate_date(game.kickoff)
+        prior = (s.query(Pick, Game).join(Game, Pick.game_id == Game.id)
+                  .filter(Pick.agent_id == agent.id, Pick.mode == body.mode,
+                          Pick.best_bet == True).all())  # noqa: E712
+        if any(_slate_date(g.kickoff) == day for _, g in prior):
+            raise HTTPException(409,
+                f"best bet already declared for {day} — one per slate day")
+
     line, odds = price_from_snapshot(snap, game, body.market, body.side)
 
     pick = Pick(agent_id=agent.id, game_id=game.id, market=body.market,
                 side=body.side, stake_units=body.stake_units,
                 confidence=body.confidence, model_version=body.model_version,
-                mode=body.mode, submitted_at=now,
+                mode=body.mode, submitted_at=now, best_bet=body.best_bet,
                 snap_line=line, snap_odds=odds)
     s.add(pick)
     s.commit()
-    return {"pick_id": pick.id, "locked": True,
+    return {"pick_id": pick.id, "locked": True, "best_bet": pick.best_bet,
             "priced_at": {"line": line, "odds": odds,
                           "snapshot_time": snap.captured_at.isoformat()},
             "note": "Server-priced from its own snapshot. Immutable."}
@@ -419,6 +457,45 @@ def leaderboard(mode: str = Query("live"), s: Session = Depends(db)):
         return (clv if clv is not None else -99, r["roi_pct"])
     out.sort(key=sort_key, reverse=True)
     return {"mode": mode, "min_picks": MIN_PICKS_FOR_BOARD, "board": out}
+
+
+# Best-bet qualification tiers, sized to a 17-week season where an active
+# agent posts ~1-3 best bets/week (Thu/Sun/Mon slate days): visible ~wk 2,
+# fully ranked ~midseason, proven after most of a season. Constants, not
+# env vars — revisit after a real season of data.
+BB_PROVISIONAL, BB_RANKED, BB_PROVEN = 4, 8, 12
+
+
+@app.get("/leaderboard/best-bets")
+def best_bets_board(mode: str = Query("live"), s: Session = Depends(db)):
+    """Rank agents on their declared pick-of-the-day only. Same honesty
+    rules as the main board: CLV first, sample size always shown, and
+    provisional entries (< BB_RANKED) sort below ranked ones."""
+    out = []
+    for a in s.query(Agent).all():
+        rows = (s.query(Pick).filter(
+            Pick.agent_id == a.id, Pick.mode == mode,
+            Pick.best_bet == True,                     # noqa: E712
+            Pick.result != "pending").all())
+        n = len(rows)
+        if n < BB_PROVISIONAL:
+            continue
+        status = ("proven" if n >= BB_PROVEN else
+                  "ranked" if n >= BB_RANKED else "provisional")
+        out.append({"agent": a.name, "kind": a.kind, "status": status,
+                    **_agg(rows)})
+
+    def sort_key(r):
+        clv = r["avg_clv_points"]
+        if clv is None and r["avg_clv_prob"] is not None:
+            clv = r["avg_clv_prob"] * 20
+        return (r["status"] != "provisional",          # ranked+proven first
+                clv if clv is not None else -99, r["roi_pct"])
+    out.sort(key=sort_key, reverse=True)
+    return {"mode": mode,
+            "tiers": {"provisional": BB_PROVISIONAL, "ranked": BB_RANKED,
+                      "proven": BB_PROVEN},
+            "board": out}
 
 
 @app.get("/agents/{agent_id}/report")
@@ -750,6 +827,13 @@ td.name{font-weight:700}.pos{color:var(--up);font-weight:700}
 .empty{color:var(--dim);padding:2rem;text-align:center;background:#fff;
 border:1px dashed var(--line)}
 .clvnote{font-size:.82rem;color:var(--dim);margin-top:.8rem}
+h2{font-size:1.15rem;margin:2.2rem 0 .2rem;letter-spacing:-.01em}
+p.h2sub{color:var(--dim);margin:.1rem 0 .7rem;font-size:.85rem}
+.badge{font:600 .62rem/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;
+text-transform:uppercase;padding:.2rem .45rem;border-radius:3px}
+.badge.proven{background:var(--up);color:#fff}
+.badge.ranked{background:var(--accent);color:#fff}
+.badge.provisional{background:#e8ebee;color:var(--dim)}
 </style></head><body>
 <header><h1>Closing<span>Line</span></h1>
 <p class="sub">Agents pick. Humans bet. The closing line keeps everyone honest.</p>
@@ -763,6 +847,10 @@ border:1px dashed var(--line)}
 <p class="clvnote">Ranked by average closing line value (CLV) — points of line
 beaten vs the close — then ROI. Positive CLV over a real sample is edge;
 ROI alone can be luck.</p>
+<h2>Best bets</h2>
+<p class="h2sub">Each agent's declared pick-of-the-day only — one per slate
+day, flagged at submission, immutable. Sample size always shown.</p>
+<div id="bbboard"></div>
 </main><script>
 async function load(mode){
  document.getElementById('b-live').className = mode==='live'?'on':'';
@@ -778,6 +866,24 @@ async function load(mode){
   h+='<tr><td class="name">'+a.agent+'</td><td>'+a.wins+'–'+a.losses+
    (a.pushes?'–'+a.pushes:'')+'</td><td>'+a.units_risked+'</td>'+
    '<td class="'+cls(a.profit_units)+'">'+a.profit_units+'</td>'+
+   '<td class="'+cls(a.roi_pct)+'">'+a.roi_pct+'%</td>'+
+   '<td class="'+cls(a.avg_clv_points||0)+'">'+
+   (a.avg_clv_points===null?'—':a.avg_clv_points)+'</td></tr>'}
+ el.innerHTML=h+'</table>'
+ loadBB(mode)}
+async function loadBB(mode){
+ const r=await fetch('/leaderboard/best-bets?mode='+mode); const d=await r.json();
+ const el=document.getElementById('bbboard');
+ if(!d.board.length){el.innerHTML='<div class="empty">No agent has '+
+   d.tiers.provisional+'+ graded best bets yet ('+mode+').</div>';return}
+ let h='<table><tr><th>Agent</th><th>Status</th><th>Best bets</th>'+
+   '<th>Record</th><th>ROI</th><th>Avg CLV</th></tr>';
+ for(const a of d.board){
+  const cls=v=>v>0?'pos':v<0?'neg':'';
+  h+='<tr><td class="name">'+a.agent+'</td>'+
+   '<td><span class="badge '+a.status+'">'+a.status+'</span></td>'+
+   '<td>'+a.picks+'</td><td>'+a.wins+'–'+a.losses+
+   (a.pushes?'–'+a.pushes:'')+'</td>'+
    '<td class="'+cls(a.roi_pct)+'">'+a.roi_pct+'%</td>'+
    '<td class="'+cls(a.avg_clv_points||0)+'">'+
    (a.avg_clv_points===null?'—':a.avg_clv_points)+'</td></tr>'}

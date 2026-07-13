@@ -20,6 +20,10 @@
        real accounts to replace browser-stored keys
 - [ ] 8. Monetization activation — AFTER a live paper season is underway
 - [ ] 9. Futures picks + season-end settlement + explorer futures board
+- [x] 10. Best-bet board Phase 1 — DONE 2026-07-13 (flag at submission,
+       one/slate-day enforced, /leaderboard/best-bets with 4/8/12 tiers,
+       CLV-first, board on /; 12 new checks). Phase 2 (quarter markets on
+       single-game days) specced in HANDOFF — build in-season.
 
 ## DONE before handoff (v1.8, all tested — see tests/test_all.py)
 
@@ -44,6 +48,13 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 - 2026-07-13: Odds API cost verified live: 3 credits/snapshot (markets x
   regions), cadence ~66/month vs 500 free. weekly_update runs Tue 09:00 ET
   per README (cadence doc's Mon 09:00 slot superseded).
+- 2026-07-13: best-bet tiers 4/8/12 (owner decision) — sized to ~1-3 best
+  bets/week over a 17-week season; low floor is defensible because ranking
+  is CLV-first (continuous signal) and sample size is always displayed.
+- 2026-07-13: best bet = per SLATE DAY (ET date of kickoff), not per week —
+  a ceiling not a quota; weekly-only bettors are naturally compatible.
+- 2026-07-13: additive schema changes via _migrate_additive() in app.py
+  (try/except ALTER) — create_all can't alter existing Postgres tables.
 
 ## Live deployment facts
 

@@ -181,5 +181,66 @@ check("wednesday fires nothing",
       scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
 check("scheduler off without RUN_SCHEDULER=1", scheduler.start() is False)
 
+# --- best bets: declaration, one-per-day, tiers --------------------------
+from app import Pick as PickRow, Game as GameRow  # noqa: E402
+
+bb_key = c.post("/agents/register",
+                json={"name": "bb_bot", "kind": "bot"}).json()["api_key"]
+bb_s = SessionLocal()
+upcoming = bb_s.query(GameRow).filter(GameRow.final == False).first()  # noqa: E712
+played = bb_s.query(GameRow).filter(GameRow.final == True).first()     # noqa: E712
+
+r = c.post("/picks", headers={"x-api-key": bb_key},
+           json={"game_id": upcoming.id, "market": "spread",
+                 "side": upcoming.home, "stake_units": 1, "best_bet": True})
+check("best bet accepted and echoed", r.status_code == 200
+      and r.json()["best_bet"] is True)
+r = c.post("/picks", headers={"x-api-key": bb_key},
+           json={"game_id": upcoming.id, "market": "total",
+                 "side": "OVER", "stake_units": 1, "best_bet": True})
+check("second best bet same slate day -> 409", r.status_code == 409)
+r = c.post("/picks", headers={"x-api-key": bb_key},
+           json={"game_id": upcoming.id, "market": "total",
+                 "side": "UNDER", "stake_units": 1})
+check("regular pick same day still fine", r.status_code == 200)
+r = c.post("/picks", headers={"x-api-key": bb_key},
+           json={"game_id": played.id, "market": "spread",
+                 "side": played.home, "stake_units": 1, "best_bet": True,
+                 "mode": "backtest",
+                 "as_of": (played.kickoff - timedelta(hours=1)).isoformat()})
+check("backtest best bet separate from live", r.status_code == 200)
+
+# tier logic: seed graded best bets directly (uniqueness is API-level)
+def _mk_bb_agent(name, n, clv):
+    aid = c.post("/agents/register",
+                 json={"name": name, "kind": "bot"}).json()["agent_id"]
+    for i in range(n):
+        bb_s.add(PickRow(agent_id=aid, game_id=played.id, market="spread",
+                         side=played.home, stake_units=1.0, mode="live",
+                         submitted_at=datetime.utcnow(), snap_line=-3.0,
+                         snap_odds=-110, best_bet=True, result="win",
+                         profit_units=0.909, clv_points=clv))
+    bb_s.commit()
+
+_mk_bb_agent("bb_t3", 3, 9.0)    # below floor — must not appear
+_mk_bb_agent("bb_t4", 4, 5.0)    # provisional (high CLV on purpose)
+_mk_bb_agent("bb_t8", 8, 1.0)    # ranked
+_mk_bb_agent("bb_t12", 12, 0.5)  # proven
+bb_s.close()
+
+board = c.get("/leaderboard/best-bets?mode=live").json()
+by = {r["agent"]: r for r in board["board"]}
+check("tiers are 4/8/12", board["tiers"] ==
+      {"provisional": 4, "ranked": 8, "proven": 12})
+check("3 best bets stays off the board", "bb_t3" not in by)
+check("4 -> provisional", by.get("bb_t4", {}).get("status") == "provisional")
+check("8 -> ranked", by.get("bb_t8", {}).get("status") == "ranked")
+check("12 -> proven", by.get("bb_t12", {}).get("status") == "proven")
+check("sample size in payload", by.get("bb_t12", {}).get("picks") == 12)
+names = [r["agent"] for r in board["board"]]
+check("provisional sorts below ranked despite higher CLV",
+      names.index("bb_t4") > names.index("bb_t8"))
+check("pending best bets don't count", "bb_bot" not in by)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

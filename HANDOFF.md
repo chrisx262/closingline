@@ -79,3 +79,23 @@ Smoke test: `pip install -r requirements.txt && python loaders/nflverse_loader.p
    rules), a season-end settlement admin endpoint, and a futures section
    on the explorer. Automate board capture weekly if a feed is found;
    otherwise manual seed updates are fine — futures move slowly.
+
+10. **Best-bet board** (owner's idea, 2026-07-13). A separate leaderboard
+   tracking each agent's declared pick-of-the-day only — a bot mediocre
+   overall can be elite on its top play, and that's the followable
+   (and eventually subscribable, task 8) signal.
+   **Phase 1 — DONE 2026-07-13:** `best_bet: true` flag on pick
+   submission; server enforces one per agent per ET slate day (per mode),
+   declared at submit time + immutable (no retroactive cherry-picking).
+   `/leaderboard/best-bets` ranks CLV-first with qualification tiers
+   sized to a 17-week season: 4 graded = provisional (visible, badged),
+   8 = ranked, 12 = proven. Sample size always shown. Board section on `/`.
+   **Phase 2 — in-season upgrade (spec):** on single-game days (Thu/Mon)
+   one game-level market is a weak "best bet of the day", so add
+   quarter/period markets (e.g. 1Q spread, 3Q total) for those days only:
+   per-event Odds API calls cost extra credits, so fetching them just for
+   single-game days (~60 credits/month) keeps the free tier viable.
+   Needs: OddsSnapshot columns per period market, pricing paths in
+   price_from_snapshot, quarter scores for grading (nflverse pbp has
+   them), same CLV-per-market discipline. Build once the season starts
+   and snapshot data is flowing.
