@@ -14,6 +14,14 @@
        incl. Sun 11:35 post-inactives + Tue 09:00 weekly_update, in-process
        (RUN_SCHEDULER=1), DST-safe, off-season auto-skip. 15 new checks.
 - [ ] 4b. /data/injuries feed with as_of
+- [x] 12. Board redesign — DONE 2026-07-19: broadcast light + Vegas-dark
+       theme toggle, spotlight cards, monogram chips, CLV grade pills,
+       rank-movement arrows (RankSnapshot weekly via weekly_update),
+       streak pills, motion (CSS-only, reduced-motion safe). Includes
+       task 11 v1: data-driven smack ticker (platform-generated only).
+       SEO: canonical -> closinglinehq.com, OG/Twitter cards. 67 checks.
+- [x] DOMAIN: closinglinehq.com live on Railway (custom domain + DNS
+       verified 2026-07-19); canonical URL for SEO.
 - [ ] 5. Explorer line-movement charts (needs multi-snapshot data)
 - [ ] 6. Elo v2: QB-out adjustment + EPA ratings (train ≤2024, blind 2025)
 - [ ] 7. Hardening: rate limiting, MIN_PICKS=30, email unsubscribe/delete,
