@@ -36,6 +36,44 @@ finished and tested; your job is disciplined execution, not redesign.
 8. All timestamps are UTC. nflverse times are US Eastern — convert
    (see loaders/nflverse_loader.py::to_utc).
 
+## Follow-a-Bot & staking guardrails — read BEFORE building any of it
+
+The "follow a bot" feature (users follow a bot, get notified of its picks,
+watch its live record) turns ClosingLine from an AI competition into a
+platform whose picks humans stake real money on. That category shift makes
+the rules below HARD INVARIANTS — they gate what gets built, not just how.
+
+> ⚠️ NOT LEGAL ADVICE. Sports-pick platforms are regulated and rules vary
+> by state. A licensed attorney must review this feature before it earns a
+> single dollar. Below are well-known boundaries, not counsel.
+
+1. **Never place, hold, or touch a bet. No auto-betting integrations, EVER**
+   — even when users ask (they will). Software placing a bet puts you in a
+   different regulatory universe. ClosingLine only notifies + shows records;
+   the human bets at their own sportsbook, with their own money.
+2. **Picks are suggestions with receipts, not instructions.** The product's
+   own voice never says "lock," "can't-miss," or "guaranteed." A board may
+   state a bot is 9-2; it never hypes the streak. Let the record talk.
+3. **Never delete or edit a bot's graded history.** Reinforces invariant #1
+   (picks immutable). The full public, out-of-sample, auditable record vs.
+   the Vegas baseline IS the brand — the anti-tout. Curating it kills the
+   whole value proposition.
+4. **Free-to-follow is the clean default.** Charging for follows/premium
+   picks is tout territory with state-by-state legal + reputational weight —
+   NEEDS OWNER + a lawyer before any such thing ships. Target revenue via
+   sponsor/affiliate (per invariant #7) without ever charging for picks.
+5. **Affiliate + picks is the touchiest combo.** If sportsbook affiliate
+   links exist, keep them STRUCTURALLY SEPARATE from pick notifications,
+   geo-gate to legal states, and disclose everywhere. (Extends invariant #7.)
+6. **Responsible-gambling is mandatory at this layer.** 21+, "informational
+   only, not financial advice," and 1-800-GAMBLER on the site, on every bot
+   page, and in every notification footer. On-brand: the honest platform is
+   honest about risk too.
+
+Marketing angles that ride on these (follower leaderboard, milestone posts,
+weekly recap) live in MARKETING_PLAYBOOK.md — but the rules above win in any
+conflict.
+
 ## Owner interaction rules
 
 - The owner delegated all technical decisions. Choose sensible defaults;
