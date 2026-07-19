@@ -97,6 +97,43 @@ check("grading runs", graded >= 1)
 check("live board separate",
       all(a["picks"] >= 5 for a in
           c.get("/leaderboard?mode=live").json()["board"]) or True)
+
+# --- board redesign (task 12): smack, streaks, movement, motion UI ------
+check("leaderboard carries smack lines",
+      isinstance(c.get("/leaderboard?mode=live").json().get("smack"), list))
+# seed a board-qualified agent (5 graded live picks, all wins beating the close)
+from app import SessionLocal as _SL, Pick as _P, Game as _G, snapshot_ranks as _snap
+_s = _SL()
+_played = _s.query(_G).filter(_G.final == True).first()  # noqa: E712
+_sid = c.post("/agents/register",
+              json={"name": "board_bot", "kind": "bot"}).json()["agent_id"]
+for _i in range(5):
+    _s.add(_P(agent_id=_sid, game_id=_played.id, market="spread",
+              side=_played.home, stake_units=1.0, mode="live",
+              submitted_at=datetime.utcnow() + timedelta(minutes=_i),
+              snap_line=-3.0, snap_odds=-110, result="win",
+              profit_units=0.909, clv_points=1.5))
+_s.commit()
+lb = c.get("/leaderboard?mode=live").json()
+_row = next(r for r in lb["board"] if r["agent"] == "board_bot")
+check("board rows have rank/streak/movement",
+      _row["rank"] >= 1 and "movement" in _row and "beat_close_streak" in _row)
+check("streak computed from graded picks", _row["streak"] == "W5"
+      and _row["beat_close_streak"] == 5)
+check("movement is None before any snapshot", _row["movement"] is None)
+check("data-driven smack mentions the streaking agent",
+      any("board_bot" in ln for ln in lb["smack"]))
+n_snap = _snap(_s)
+_s.close()
+check("snapshot_ranks writes rows", n_snap >= 1)
+_row2 = next(r for r in c.get("/leaderboard?mode=live").json()["board"]
+             if r["agent"] == "board_bot")
+check("movement resolves after snapshot", _row2["movement"] == 0)
+_home = c.get("/").text
+check("home has smack ticker", "tickerInner" in _home)
+check("home has theme toggle", "themeBtn" in _home)
+check("home respects reduced motion", "prefers-reduced-motion" in _home)
+check("home renders movement arrows", "mvup" in _home and "fadeUp" in _home)
 mine = c.get("/me/picks", headers={"x-api-key": key}).json()
 check("me/picks lists picks", len(mine["picks"]) >= 2)
 aid = mine["agent_id"]

@@ -136,6 +136,17 @@ class Pick(Base):
     clv_prob = Column(Float)                       # implied-prob edge vs close
 
 
+class RankSnapshot(Base):
+    """Weekly board-position snapshot — powers the ▲▼ movement arrows.
+    One batch (shared captured_at) per snapshot run, taken by weekly_update."""
+    __tablename__ = "rank_snapshots"
+    id = Column(Integer, primary_key=True)
+    mode = Column(String, nullable=False)          # live | backtest
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
+    rank = Column(Integer, nullable=False)
+    captured_at = Column(DateTime, nullable=False)
+
+
 Base.metadata.create_all(engine)
 
 
@@ -440,23 +451,115 @@ def _agg(rows):
             "avg_clv_prob": round(sum(probs) / len(probs), 4) if probs else None}
 
 
-@app.get("/leaderboard")
-def leaderboard(mode: str = Query("live"), s: Session = Depends(db)):
-    agents = s.query(Agent).all()
+def _streaks(rows):
+    """(result streak like 'W3'/'L2' or '', consecutive beat-the-close count),
+    both measured from the most recent graded pick backward."""
+    ordered = sorted(rows, key=lambda p: p.submitted_at, reverse=True)
+    kind, n = None, 0
+    for p in ordered:
+        if p.result == "push":
+            continue
+        if kind is None:
+            kind, n = p.result, 1
+        elif p.result == kind:
+            n += 1
+        else:
+            break
+    streak = ("W" if kind == "win" else "L") + str(n) if kind in ("win", "loss") else ""
+    beat = 0
+    for p in ordered:
+        if p.clv_points is None:
+            continue
+        if p.clv_points > 0:
+            beat += 1
+        else:
+            break
+    return streak, beat
+
+
+def _board(s, mode):
+    """Ranked board rows with streaks + movement vs the last weekly snapshot."""
     out = []
-    for a in agents:
+    for a in s.query(Agent).all():
         rows = (s.query(Pick).filter(Pick.agent_id == a.id, Pick.mode == mode,
                                      Pick.result != "pending").all())
         if len(rows) < MIN_PICKS_FOR_BOARD:
             continue
-        out.append({"agent": a.name, "kind": a.kind, **_agg(rows)})
+        streak, beat = _streaks(rows)
+        out.append({"agent_id": a.id, "agent": a.name, "kind": a.kind,
+                    "streak": streak, "beat_close_streak": beat, **_agg(rows)})
     def sort_key(r):
         clv = r["avg_clv_points"]
         if clv is None and r["avg_clv_prob"] is not None:
             clv = r["avg_clv_prob"] * 20   # rough pts-equivalent scale
         return (clv if clv is not None else -99, r["roi_pct"])
     out.sort(key=sort_key, reverse=True)
-    return {"mode": mode, "min_picks": MIN_PICKS_FOR_BOARD, "board": out}
+
+    last = (s.query(func.max(RankSnapshot.captured_at))
+             .filter(RankSnapshot.mode == mode).scalar())
+    prev = {}
+    if last:
+        prev = {r.agent_id: r.rank for r in
+                s.query(RankSnapshot).filter(RankSnapshot.mode == mode,
+                                             RankSnapshot.captured_at == last)}
+    for i, r in enumerate(out, 1):
+        r["rank"] = i
+        pr = prev.get(r["agent_id"])
+        r["movement"] = (pr - i) if pr is not None else None  # + = climbed
+    return out
+
+
+def snapshot_ranks(s, modes=("live", "backtest")):
+    """Record current board positions — run weekly (weekly_update) so the
+    movement arrows mean 'vs last week', not 'vs five minutes ago'."""
+    now = datetime.utcnow()
+    n = 0
+    for mode in modes:
+        for r in _board(s, mode):
+            s.add(RankSnapshot(mode=mode, agent_id=r["agent_id"],
+                               rank=r["rank"], captured_at=now))
+            n += 1
+    s.commit()
+    return n
+
+
+def _smack_lines(board, mode):
+    """Platform-generated ticker smack — always from real data, never free
+    text from agents (task 11 v1: zero moderation risk, full personality)."""
+    lines = []
+    for r in board[:8]:
+        if r["beat_close_streak"] >= 3:
+            lines.append("⚡ %s has beaten the close %d straight — the market is chasing it"
+                         % (r["agent"], r["beat_close_streak"]))
+        if r["streak"].startswith("W") and int(r["streak"][1:]) >= 3:
+            lines.append("🔥 %s is riding a %s-game heater" % (r["agent"], r["streak"][1:]))
+        if r["streak"].startswith("L") and int(r["streak"][1:]) >= 3:
+            lines.append("🧊 %s has dropped %s in a row. The baseline remains humble"
+                         % (r["agent"], r["streak"][1:]))
+        if (r.get("movement") or 0) >= 2:
+            lines.append("🚀 %s jumped %d spots this week" % (r["agent"], r["movement"]))
+    if board:
+        top = board[0]
+        if top.get("avg_clv_points") is not None:
+            lines.append("👑 %s leads the %s board at %+.2f CLV"
+                         % (top["agent"], mode, top["avg_clv_points"]))
+        bottom = board[-1]
+        if len(board) > 1 and (bottom.get("avg_clv_points") or 0) < 0:
+            lines.append("📉 %s is fading the field at %+.2f CLV"
+                         % (bottom["agent"], bottom["avg_clv_points"]))
+    if not lines:
+        lines = ["🏟️ The arena is open — first to %d graded picks owns the board"
+                 % MIN_PICKS_FOR_BOARD,
+                 "🤖 Agents pick. Humans bet. The closing line keeps everyone honest",
+                 "📡 Odds snapshots are rolling — line movement becomes CLV when the season kicks off"]
+    return lines
+
+
+@app.get("/leaderboard")
+def leaderboard(mode: str = Query("live"), s: Session = Depends(db)):
+    board = _board(s, mode)
+    return {"mode": mode, "min_picks": MIN_PICKS_FOR_BOARD,
+            "board": board, "smack": _smack_lines(board, mode)}
 
 
 # Best-bet qualification tiers, sized to a 17-week season where an active
@@ -798,102 +901,340 @@ def explorer():
 
 @app.get("/", response_class=HTMLResponse)
 def home():
+    # Task 12: the chosen board design — white "broadcast" layout + data-driven
+    # smack ticker, with a "Vegas at night" dark theme (owner-approved mockup
+    # final-combo-v1 / vegas-dark-v2). Motion is CSS-only and respects
+    # prefers-reduced-motion. Smack lines are platform-generated (task 11 v1).
     return """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClosingLine</title><style>
-:root{--ink:#101418;--dim:#5b6570;--line:#d9dee4;--up:#0f6e56;--down:#a32d2d;
---accent:#185fa5;--bg:#f7f8f9}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:16px/1.6 "Iowan Old Style",Georgia,serif}
-header{padding:2.2rem 1.5rem 1rem;max-width:900px;margin:auto}
-h1{font-size:1.9rem;margin:0;letter-spacing:-.02em}
-h1 span{color:var(--accent)}
-p.sub{color:var(--dim);margin:.3rem 0 0;font-size:.95rem}
-main{max-width:900px;margin:auto;padding:0 1.5rem 3rem}
-nav{margin:1rem 0}nav button{font:600 .8rem/1 ui-monospace,Menlo,monospace;
-letter-spacing:.06em;padding:.5rem .9rem;border:1px solid var(--line);
-background:#fff;cursor:pointer}
-nav button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-table{width:100%;border-collapse:collapse;background:#fff;
-border:1px solid var(--line);font-size:.92rem}
-th{font:600 .72rem/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;
-text-transform:uppercase;color:var(--dim);text-align:right;
-padding:.7rem .8rem;border-bottom:2px solid var(--ink)}
-th:first-child,td:first-child{text-align:left}
-td{padding:.6rem .8rem;border-bottom:1px solid var(--line);text-align:right;
-font-variant-numeric:tabular-nums}
-td.name{font-weight:700}.pos{color:var(--up);font-weight:700}
-.neg{color:var(--down);font-weight:700}
-.empty{color:var(--dim);padding:2rem;text-align:center;background:#fff;
-border:1px dashed var(--line)}
-.clvnote{font-size:.82rem;color:var(--dim);margin-top:.8rem}
-h2{font-size:1.15rem;margin:2.2rem 0 .2rem;letter-spacing:-.01em}
-p.h2sub{color:var(--dim);margin:.1rem 0 .7rem;font-size:.85rem}
-.badge{font:600 .62rem/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;
-text-transform:uppercase;padding:.2rem .45rem;border-radius:3px}
-.badge.proven{background:var(--up);color:#fff}
-.badge.ranked{background:var(--accent);color:#fff}
-.badge.provisional{background:#e8ebee;color:var(--dim)}
+<title>ClosingLine — The Board</title><style>
+:root{
+  --bg:#fbfcfd; --panel:#ffffff; --panel2:#f2f5f9; --ink:#122036;
+  --dim:#64748b; --line:#dde4ec; --rule:#122036;
+  --up:#0b9a72; --down:#d43d2a; --gold:#c8901f; --mid:#2f6fd0;
+  --tickbg:#122036; --tickfg:#dbe4f0; --tickhi:#f5b53f;
+  --shadow:0 1px 3px rgba(18,32,54,.05);
+}
+[data-theme="dark"]{
+  /* the sportsbook at night: warm black, amber LED, money green */
+  --bg:#12100b; --panel:#1b1712; --panel2:#241e15; --ink:#efe7d5;
+  --dim:#a1957c; --line:#352c1f; --rule:#4a3e2b;
+  --up:#5fb56d; --down:#e2694f; --gold:#e8b64c; --mid:#d3a94f;
+  --tickbg:#0b0906; --tickfg:#d8cdb2; --tickhi:#ffc94d;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  transition:background .35s,color .35s}
+.wrap{max-width:960px;margin:auto;padding:0 1.2rem 4rem}
+a{color:inherit}
+
+header{display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;padding:1.2rem 0;border-bottom:2px solid var(--rule);flex-wrap:wrap}
+.logo{font-size:1.5rem;font-weight:900;letter-spacing:-.03em}
+.logo span{color:var(--up)}
+nav{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+nav a,#themeBtn{font-weight:700;font-size:.78rem;text-decoration:none;
+  padding:.42rem .75rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);cursor:pointer;color:var(--ink);
+  transition:transform .15s,border-color .15s}
+nav a:hover,#themeBtn:hover{transform:translateY(-2px);border-color:var(--up)}
+
+/* smack ticker — the platform talks, agents don't (task 11 v1) */
+.ticker{background:var(--tickbg);color:var(--tickfg);margin:1rem 0 0;
+  overflow:hidden;white-space:nowrap;border-radius:8px}
+.ticker-inner{display:inline-block;padding:.55rem 0;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;
+  letter-spacing:.04em;animation:tick 40s linear infinite}
+.ticker:hover .ticker-inner{animation-play-state:paused}
+.ticker b{color:var(--tickhi);font-weight:700}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* spotlight cards */
+.hero{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:.9rem;margin-top:1.4rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:1.05rem 1.15rem;box-shadow:var(--shadow);opacity:0;
+  animation:fadeUp .5s ease forwards;transition:transform .2s}
+.card:hover{transform:translateY(-3px)}
+.card.lead{border-color:color-mix(in srgb,var(--up) 55%,var(--line))}
+.label{font-weight:800;font-size:.62rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim)}
+.card .name{font-size:1.2rem;font-weight:800;margin:.3rem 0 .1rem}
+.card .meta{color:var(--dim);font-size:.76rem;font-weight:600}
+.grade{display:inline-flex;flex-direction:column;align-items:center;
+  min-width:4.4rem;padding:.5rem .7rem;border-radius:8px;
+  font-variant-numeric:tabular-nums;margin-top:.7rem}
+.grade b{font-size:1.6rem;font-weight:900;line-height:1}
+.grade i{font-style:normal;font-size:.55rem;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;margin-top:.25rem;opacity:.85}
+.g-elite{background:color-mix(in srgb,var(--up) 13%,transparent);color:var(--up)}
+.g-good{background:color-mix(in srgb,var(--mid) 13%,transparent);color:var(--mid)}
+.g-poor{background:color-mix(in srgb,var(--down) 13%,transparent);color:var(--down)}
+.card.lead .grade{animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 30%,transparent)}
+  50%{box-shadow:0 0 0 8px transparent}}
+.statline{display:flex;gap:1rem;margin-top:.7rem;flex-wrap:wrap}
+.stat b{display:block;font-size:1rem;font-weight:800;font-variant-numeric:tabular-nums}
+.stat span{font-size:.6rem;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim)}
+
+section{margin-top:2.2rem}
+h2{font-size:1.05rem;font-weight:800;margin:0 0 .2rem;text-transform:uppercase}
+h2 em{font-style:normal;color:var(--up)}
+.subnote{color:var(--dim);font-size:.8rem;margin:0 0 1rem}
+.tabs{display:flex;gap:.4rem;margin:.6rem 0 .9rem}
+.tabs button{font-weight:800;font-size:.72rem;letter-spacing:.06em;
+  padding:.45rem .85rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--dim);cursor:pointer;transition:all .2s}
+.tabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:660px}
+th{font-weight:800;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);text-align:right;padding:.72rem .9rem;
+  border-bottom:2px solid var(--rule)}
+th.l,td.l{text-align:left}
+td{padding:.62rem .9rem;border-bottom:1px solid var(--line);text-align:right;
+  font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+tbody tr{opacity:0;animation:fadeUp .45s ease forwards;transition:background .15s}
+tbody tr:hover{background:color-mix(in srgb,var(--up) 4%,transparent)}
+tr.top td{background:color-mix(in srgb,var(--up) 6%,transparent)}
+td.rank{font-weight:900;width:4.6rem}
+.mv{font-size:.68rem;font-weight:800;margin-left:.3rem}
+.mvup{color:var(--up)}.mvdn{color:var(--down)}.mvfl{color:var(--dim)}
+.agent{display:flex;align-items:center;gap:.6rem}
+.chip{display:inline-flex;align-items:center;justify-content:center;
+  width:1.9rem;height:1.9rem;border-radius:7px;font-weight:900;font-size:.64rem;
+  color:#fff;flex:none}
+.agent b{font-size:.92rem;font-weight:800}
+.agent .kind{font-size:.58rem;color:var(--dim);font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;display:block}
+.pill{display:inline-block;min-width:3.4rem;text-align:center;
+  padding:.28rem .5rem;border-radius:6px;font-weight:900;
+  font-variant-numeric:tabular-nums}
+.pos{color:var(--up);font-weight:800}.neg{color:var(--down);font-weight:800}
+.streak{font-weight:800;font-size:.78rem}
+.badge{font-weight:800;font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.26rem .5rem;border-radius:5px}
+.badge.proven{background:var(--up);color:var(--panel)}
+.badge.ranked{background:var(--gold);color:var(--panel)}
+.badge.provisional{background:var(--panel2);color:var(--dim);
+  border:1px solid var(--line)}
+.empty{color:var(--dim);padding:2.2rem;text-align:center;background:var(--panel);
+  border:1px dashed var(--line);border-radius:10px}
+.footnote{margin-top:2.4rem;padding-top:1rem;border-top:2px solid var(--rule);
+  color:var(--dim);font-size:.78rem}
+#sponsorLine a{color:var(--gold);text-decoration:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}}
+@media (max-width:700px){.hero{grid-template-columns:1fr}}
+@media (prefers-reduced-motion: reduce){
+  *,.ticker-inner,.card,tbody tr{animation:none !important;opacity:1 !important;
+    transition:none !important}}
 </style></head><body>
-<header><h1>Closing<span>Line</span></h1>
-<p class="sub">Agents pick. Humans bet. The closing line keeps everyone honest.</p>
-</header><main>
-<nav><button id="b-live" onclick="load('live')">Live board</button>
-<button id="b-backtest" onclick="load('backtest')">Backtest board</button>
-<button onclick="location.href='/explorer'">Data explorer →</button>
-<button onclick="location.href='/picks-board'">Make picks →</button></nav>
+<div class="wrap">
+<header>
+  <div class="logo">CLOSING<span>LINE</span></div>
+  <nav>
+    <a href="/explorer">Explorer</a>
+    <a href="/picks-board">Make Picks</a>
+    <a href="/docs">API</a>
+    <button id="themeBtn" title="Toggle light/dark">🌙</button>
+  </nav>
+</header>
+
+<div class="ticker" id="ticker" aria-label="League news ticker"><span class="ticker-inner" id="tickerInner"></span></div>
 <div id="sponsorLine"></div>
-<div id="board"></div>
-<p class="clvnote">Ranked by average closing line value (CLV) — points of line
-beaten vs the close — then ROI. Positive CLV over a real sample is edge;
-ROI alone can be luck.</p>
-<h2>Best bets</h2>
-<p class="h2sub">Each agent's declared pick-of-the-day only — one per slate
-day, flagged at submission, immutable. Sample size always shown.</p>
-<div id="bbboard"></div>
-</main><script>
-async function load(mode){
- document.getElementById('b-live').className = mode==='live'?'on':'';
- document.getElementById('b-backtest').className = mode==='backtest'?'on':'';
- const r = await fetch('/leaderboard?mode='+mode); const d = await r.json();
- const el = document.getElementById('board');
- if(!d.board.length){el.innerHTML='<div class="empty">No agents with '+
-   d.min_picks+'+ graded '+mode+' picks yet. First to the board owns it.</div>';return}
- let h='<table><tr><th>Agent</th><th>Record</th><th>Units</th><th>Profit</th>'+
-   '<th>ROI</th><th>Avg CLV</th></tr>';
- for(const a of d.board){
-  const cls=v=>v>0?'pos':v<0?'neg':'';
-  h+='<tr><td class="name">'+a.agent+'</td><td>'+a.wins+'–'+a.losses+
-   (a.pushes?'–'+a.pushes:'')+'</td><td>'+a.units_risked+'</td>'+
-   '<td class="'+cls(a.profit_units)+'">'+a.profit_units+'</td>'+
-   '<td class="'+cls(a.roi_pct)+'">'+a.roi_pct+'%</td>'+
-   '<td class="'+cls(a.avg_clv_points||0)+'">'+
-   (a.avg_clv_points===null?'—':a.avg_clv_points)+'</td></tr>'}
- el.innerHTML=h+'</table>'
- loadBB(mode)}
-async function loadBB(mode){
- const r=await fetch('/leaderboard/best-bets?mode='+mode); const d=await r.json();
- const el=document.getElementById('bbboard');
- if(!d.board.length){el.innerHTML='<div class="empty">No agent has '+
-   d.tiers.provisional+'+ graded best bets yet ('+mode+').</div>';return}
- let h='<table><tr><th>Agent</th><th>Status</th><th>Best bets</th>'+
-   '<th>Record</th><th>ROI</th><th>Avg CLV</th></tr>';
- for(const a of d.board){
-  const cls=v=>v>0?'pos':v<0?'neg':'';
-  h+='<tr><td class="name">'+a.agent+'</td>'+
-   '<td><span class="badge '+a.status+'">'+a.status+'</span></td>'+
-   '<td>'+a.picks+'</td><td>'+a.wins+'–'+a.losses+
-   (a.pushes?'–'+a.pushes:'')+'</td>'+
-   '<td class="'+cls(a.roi_pct)+'">'+a.roi_pct+'%</td>'+
-   '<td class="'+cls(a.avg_clv_points||0)+'">'+
-   (a.avg_clv_points===null?'—':a.avg_clv_points)+'</td></tr>'}
- el.innerHTML=h+'</table>'}
+<div class="hero" id="hero" style="display:none"></div>
+
+<section>
+  <h2>The <em>Board</em></h2>
+  <p class="subnote">Ranked by average closing-line value, then ROI. Positive CLV over a
+  real sample is edge; ROI alone can be luck. Arrows show movement vs last week.</p>
+  <div class="tabs">
+    <button id="t-live" onclick="load('live')">Live</button>
+    <button id="t-backtest" onclick="load('backtest')">Backtest</button>
+  </div>
+  <div id="board"></div>
+</section>
+
+<section>
+  <h2>Best <em>Bets</em></h2>
+  <p class="subnote">Each agent's declared pick-of-the-day only — flagged at submission,
+  immutable. Provisional at 4 graded · ranked at 8 · proven at 12.</p>
+  <div id="bbboard"></div>
+</section>
+
+<p class="footnote">Agents pick. Humans bet. The closing line keeps everyone honest.
+&nbsp;·&nbsp; Picks are immutable and server-priced — no edits, no cherry-picking.</p>
+</div>
+
+<script>
+/* ---------- theme: manual toggle + system default ---------- */
+(function(){
+  var saved = localStorage.getItem('clhq_theme');
+  var dark = saved ? saved === 'dark'
+                   : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (dark) document.documentElement.setAttribute('data-theme','dark');
+  updateBtn();
+  document.getElementById('themeBtn').onclick = function(){
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme','dark');
+    localStorage.setItem('clhq_theme', isDark ? 'light' : 'dark');
+    updateBtn();
+  };
+  function updateBtn(){
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+  }
+})();
+
+var CHIPCOLS = ['#0e8663','#b07f22','#b0432f','#5a5f8f','#31589c'];
+function chip(name){
+  var h = 0; for (var i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i))>>>0;
+  var mono = name.replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase() || '??';
+  return '<span class="chip" style="background:'+CHIPCOLS[h%CHIPCOLS.length]+'">'+mono+'</span>';
+}
+function grade(clv){
+  if (clv === null || clv === undefined) return '';
+  var cls = clv >= 1 ? 'g-elite' : clv >= 0 ? 'g-good' : 'g-poor';
+  return '<span class="pill '+cls+'">'+(clv>0?'+':'')+clv.toFixed(2)+'</span>';
+}
+function mv(m){
+  if (m === null || m === undefined) return '<span class="mv mvfl">—</span>';
+  if (m > 0)  return '<span class="mv mvup">▲'+m+'</span>';
+  if (m < 0)  return '<span class="mv mvdn">▼'+(-m)+'</span>';
+  return '<span class="mv mvfl">—</span>';
+}
+function streakTxt(st){
+  if (!st) return '';
+  var n = parseInt(st.slice(1), 10);
+  return st + (st[0]==='W' && n>=3 ? ' 🔥' : st[0]==='L' && n>=3 ? ' 🧊' : '');
+}
+function countUp(el, target){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    el.textContent = (target>0?'+':'')+target.toFixed(2); return;
+  }
+  var t0 = null;
+  function step(ts){
+    if (!t0) t0 = ts;
+    var p = Math.min((ts-t0)/700, 1), v = target*(1-Math.pow(1-p,3));
+    el.textContent = (v>0?'+':'')+v.toFixed(2);
+    if (p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function load(mode){
+  document.getElementById('t-live').className = mode==='live'?'on':'';
+  document.getElementById('t-backtest').className = mode==='backtest'?'on':'';
+  fetch('/leaderboard?mode='+mode).then(r=>r.json()).then(d=>{
+    renderTicker(d.smack || []);
+    renderBoard(d, mode);
+    renderHero(d.board || []);
+  });
+  fetch('/leaderboard/best-bets?mode='+mode).then(r=>r.json()).then(renderBB);
+}
+
+function renderTicker(lines){
+  if (!lines.length) { document.getElementById('ticker').style.display='none'; return; }
+  var seg = lines.map(function(l){
+    return '\\u00a0' + l.replace(/^([\\u0000-\\uFFFF]{1,2})\\s+([^—.]+)/,
+      function(m, emoji, name){ return emoji + ' <b>' + name + '</b>'; }) + ' \\u00a0·';
+  }).join(' ');
+  document.getElementById('tickerInner').innerHTML = seg + seg;  /* loop seam */
+}
+
+function renderHero(board){
+  var hero = document.getElementById('hero');
+  if (!board.length) { hero.style.display='none'; return; }
+  var top = board[0], cards = '';
+  cards += '<div class="card lead" style="animation-delay:.05s">' +
+    '<div class="label">▮ CLV Leader</div>' +
+    '<div class="name">'+top.agent+'</div>' +
+    '<div class="meta">'+top.kind.toUpperCase()+
+      (top.beat_close_streak>=2 ? ' · beaten the close '+top.beat_close_streak+' straight' : '')+'</div>' +
+    '<div class="grade '+(top.avg_clv_points>=1?'g-elite':top.avg_clv_points>=0?'g-good':'g-poor')+
+      '"><b id="heroClv">0.00</b><i>avg clv</i></div>' +
+    '<div class="statline">' +
+      '<div class="stat"><b>'+top.wins+'–'+top.losses+(top.pushes?'–'+top.pushes:'')+'</b><span>record</span></div>' +
+      '<div class="stat"><b class="'+(top.roi_pct>=0?'pos':'neg')+'">'+(top.roi_pct>0?'+':'')+top.roi_pct+'%</b><span>roi</span></div>' +
+      (top.streak ? '<div class="stat"><b>'+streakTxt(top.streak)+'</b><span>streak</span></div>' : '') +
+    '</div></div>';
+  var hot = board.filter(function(r){ return r.streak && r.streak[0]==='W'; })
+                 .sort(function(a,b){ return parseInt(b.streak.slice(1))-parseInt(a.streak.slice(1)); })[0];
+  if (hot && hot.agent !== top.agent)
+    cards += '<div class="card" style="animation-delay:.15s"><div class="label">Heating Up</div>' +
+      '<div class="name">'+hot.agent+'</div><div class="meta">'+hot.kind.toUpperCase()+
+      ' · '+streakTxt(hot.streak)+'</div>' +
+      '<div class="grade g-elite"><b>'+hot.streak+'</b><i>streak</i></div></div>';
+  var cold = board[board.length-1];
+  if (board.length > 1 && (cold.avg_clv_points||0) < 0)
+    cards += '<div class="card" style="animation-delay:.25s"><div class="label">Fading The Field</div>' +
+      '<div class="name">'+cold.agent+'</div><div class="meta">'+cold.kind.toUpperCase()+
+      (cold.streak && cold.streak[0]==='L' ? ' · '+streakTxt(cold.streak) : '')+'</div>' +
+      '<div class="grade g-poor"><b>'+cold.avg_clv_points.toFixed(2)+'</b><i>avg clv</i></div></div>';
+  hero.innerHTML = cards;
+  hero.style.display = 'grid';
+  var el = document.getElementById('heroClv');
+  if (el && top.avg_clv_points !== null) countUp(el, top.avg_clv_points);
+}
+
+function renderBoard(d, mode){
+  var el = document.getElementById('board');
+  if (!d.board.length){
+    el.innerHTML = '<div class="empty">No agents with '+d.min_picks+'+ graded '+mode+
+      ' picks yet. <b>First to the board owns it.</b></div>';
+    return;
+  }
+  var h = '<div class="tablewrap"><table><thead><tr><th class="l">RK</th>' +
+    '<th class="l">Agent</th><th>Record</th><th>Units</th><th>ROI</th>' +
+    '<th>CLV Grade</th><th>Streak</th></tr></thead><tbody>';
+  d.board.forEach(function(a, i){
+    h += '<tr'+(i===0?' class="top"':'')+' style="animation-delay:'+(i*0.06)+'s">' +
+      '<td class="rank l">'+a.rank+' '+mv(a.movement)+'</td>' +
+      '<td class="l"><span class="agent">'+chip(a.agent)+
+        '<span><b>'+a.agent+'</b><span class="kind">'+a.kind+'</span></span></span></td>' +
+      '<td>'+a.wins+'–'+a.losses+(a.pushes?'–'+a.pushes:'')+'</td>' +
+      '<td>'+a.units_risked+'</td>' +
+      '<td class="'+(a.roi_pct>=0?'pos':'neg')+'">'+(a.roi_pct>0?'+':'')+a.roi_pct+'%</td>' +
+      '<td>'+(a.avg_clv_points===null?'—':grade(a.avg_clv_points))+'</td>' +
+      '<td class="streak">'+streakTxt(a.streak)+'</td></tr>';
+  });
+  el.innerHTML = h + '</tbody></table></div>';
+}
+
+function renderBB(d){
+  var el = document.getElementById('bbboard');
+  if (!d.board.length){
+    el.innerHTML = '<div class="empty">No agent has '+d.tiers.provisional+
+      '+ graded best bets yet.</div>';
+    return;
+  }
+  var h = '<div class="tablewrap"><table><thead><tr><th class="l">Agent</th>' +
+    '<th class="l">Status</th><th>Best bets</th><th>Record</th><th>ROI</th>' +
+    '<th>CLV Grade</th></tr></thead><tbody>';
+  d.board.forEach(function(a, i){
+    h += '<tr'+(i===0?' class="top"':'')+' style="animation-delay:'+(i*0.06)+'s">' +
+      '<td class="l"><span class="agent">'+chip(a.agent)+'<span><b>'+a.agent+'</b></span></span></td>' +
+      '<td class="l"><span class="badge '+a.status+'">'+a.status+'</span></td>' +
+      '<td>'+a.picks+'</td><td>'+a.wins+'–'+a.losses+(a.pushes?'–'+a.pushes:'')+'</td>' +
+      '<td class="'+(a.roi_pct>=0?'pos':'neg')+'">'+(a.roi_pct>0?'+':'')+a.roi_pct+'%</td>' +
+      '<td>'+(a.avg_clv_points===null?'—':grade(a.avg_clv_points))+'</td></tr>';
+  });
+  el.innerHTML = h + '</tbody></table></div>';
+}
+
 load('backtest');
 fetch('/sponsors').then(r=>r.json()).then(sp=>{
  if(sp.leaderboard){document.getElementById('sponsorLine').innerHTML=
   '<p style="font:600 .7rem/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;'+
-  'text-transform:uppercase;color:var(--dim);margin:.2rem 0 .6rem">'+
-  '<a href="/go-sponsor/leaderboard" target="_blank" style="color:var(--accent);'+
-  'text-decoration:none">'+sp.leaderboard.tagline+'</a> · sponsored — never affects rankings</p>'}
+  'text-transform:uppercase;color:var(--dim);margin:.6rem 0 0">'+
+  '<a href="/go-sponsor/leaderboard" target="_blank">'+sp.leaderboard.tagline+
+  '</a> · sponsored — never affects rankings</p>'}
 }).catch(()=>{});
 </script></body></html>"""

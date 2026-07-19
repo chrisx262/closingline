@@ -42,6 +42,13 @@ def run(season: int = 2026):
     else:
         print("nothing to grade")
 
+    # weekly board-position snapshot → powers the ▲▼ movement arrows on /
+    from app import snapshot_ranks
+    s = SessionLocal()
+    n = snapshot_ranks(s)
+    s.close()
+    print(f"rank snapshot: {n} rows")
+
 
 if __name__ == "__main__":
     run(int(sys.argv[1]) if len(sys.argv) > 1 else 2026)
