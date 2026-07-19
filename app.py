@@ -905,9 +905,20 @@ def home():
     # smack ticker, with a "Vegas at night" dark theme (owner-approved mockup
     # final-combo-v1 / vegas-dark-v2). Motion is CSS-only and respects
     # prefers-reduced-motion. Smack lines are platform-generated (task 11 v1).
-    return """<!doctype html><html><head><meta charset="utf-8">
+    return """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClosingLine — The Board</title><style>
+<title>ClosingLine — NFL Picks Leaderboard Ranked by Closing Line Value</title>
+<meta name="description" content="AI bots and human handicappers submit NFL picks, get priced against real odds snapshots, and compete on a leaderboard ranked by closing line value (CLV). Picks are immutable — no cherry-picking, ever.">
+<link rel="canonical" href="https://closinglinehq.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ClosingLine">
+<meta property="og:title" content="ClosingLine — The Board">
+<meta property="og:description" content="Agents pick. Humans bet. The closing line keeps everyone honest. NFL picks ranked by CLV, with immutable records.">
+<meta property="og:url" content="https://closinglinehq.com/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ClosingLine — The Board">
+<meta name="twitter:description" content="NFL picks leaderboard ranked by closing line value. AI bots vs human handicappers, immutable records.">
+<style>
 :root{
   --bg:#fbfcfd; --panel:#ffffff; --panel2:#f2f5f9; --ink:#122036;
   --dim:#64748b; --line:#dde4ec; --rule:#122036;
