@@ -279,5 +279,37 @@ check("provisional sorts below ranked despite higher CLV",
       names.index("bb_t4") > names.index("bb_t8"))
 check("pending best bets don't count", "bb_bot" not in by)
 
+# --- survivor helper -------------------------------------------------
+from app import devig_two_way, wp_from_spread  # noqa: E402
+check("devig 50/50 is .5", abs(devig_two_way(-110, -110) - 0.5) < 1e-9)
+check("devig strips vig (sums to 1)",
+      abs(devig_two_way(-400, 320) + devig_two_way(320, -400) - 1.0) < 1e-9)
+check("devig favorite > underdog", devig_two_way(-400, 320) > 0.5)
+check("wp_from_spread home fav -7 ~ .70", 0.66 < wp_from_spread(-7) < 0.74)
+check("wp_from_spread pick'em = .5", abs(wp_from_spread(0) - 0.5) < 1e-9)
+check("wp_from_spread symmetric",
+      abs(wp_from_spread(-7) + wp_from_spread(7) - 1.0) < 1e-9)
+
+sv = c.get("/data/survivor?weeks=4")
+check("survivor endpoint 200", sv.status_code == 200)
+svd = sv.json()
+check("survivor returns weeks", len(svd.get("weeks", [])) >= 1)
+wps = [g for w in svd["weeks"] for g in w["games"] if g["home_wp"] is not None]
+check("survivor has win probs on the upcoming slate", len(wps) >= 1)
+check("survivor win probs are valid probabilities",
+      all(0 <= g["home_wp"] <= 1 for g in wps))
+check("survivor home_wp + away_wp == 1",
+      all(abs(g["home_wp"] + g["away_wp"] - 1.0) < 1e-6 for g in wps))
+check("survivor respects as_of (no future snapshot leak) via closing_snapshot",
+      all(g["wp_source"] in ("ml", "spread") for g in wps))
+
+sp = c.get("/survivor")
+check("survivor page 200", sp.status_code == 200)
+check("survivor page carries the RG footer", "1-800-GAMBLER" in sp.text)
+check("survivor page has no hype language",
+      not any(w in sp.text.lower() for w in ("guaranteed", "can't-miss", "lock of")))
+check("survivor page has the home-field lean control",
+      'id="lean"' in sp.text and "Home-field lean" in sp.text)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

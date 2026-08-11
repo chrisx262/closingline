@@ -15,6 +15,7 @@ Design decisions (made on the founder's behalf, all swappable later):
 
 import hashlib
 import hmac
+import math
 import os
 import secrets
 from datetime import datetime
@@ -192,6 +193,31 @@ def payout_mult(american: int) -> float:
     if american < 0:
         return 100 / -american
     return american / 100
+
+
+def devig_two_way(odds_a: int, odds_b: int) -> Optional[float]:
+    """Vig-removed (fair) win probability for side A from both American prices.
+    Raw implied probs sum to >1 (the hold); normalize to strip it out."""
+    if odds_a is None or odds_b is None:
+        return None
+    pa, pb = implied_prob(odds_a), implied_prob(odds_b)
+    tot = pa + pb
+    return pa / tot if tot else None
+
+
+# NFL final-margin standard deviation ≈ 13.45 pts; used to turn a point spread
+# into a win probability when a moneyline isn't available for a game.
+_MARGIN_SD = 13.45
+
+
+def wp_from_spread(spread_home_line: Optional[float]) -> Optional[float]:
+    """Approximate HOME win probability from the home spread. Convention here:
+    spread_home_line negative = home favored (e.g. -3.5). Expected home margin
+    is therefore -spread_home_line, mapped through a normal model."""
+    if spread_home_line is None:
+        return None
+    exp_margin = -spread_home_line
+    return 0.5 * (1 + math.erf(exp_margin / (_MARGIN_SD * math.sqrt(2))))
 
 
 def snapshot_at(s: Session, game_id: str, at: datetime) -> Optional[OddsSnapshot]:
@@ -839,6 +865,50 @@ def slate(week: int, season: Optional[int] = None, s: Session = Depends(db)):
     return [_game_ctx(s, g) for g in q.order_by(Game.kickoff)]
 
 
+@app.get("/data/survivor")
+def survivor_data(weeks: int = 8, season: Optional[int] = None,
+                  start_week: Optional[int] = None, s: Session = Depends(db)):
+    """Market win-probabilities for survivor planning. For each of the next
+    `weeks` weeks, every game's de-vigged win prob per team (from moneyline;
+    spread fallback). Straight-up win prob is exactly the survivor signal, and
+    the market beats our own model at it — so this leans on the closing/latest
+    market line. No lookahead beyond the latest snapshot at/before kickoff."""
+    weeks = max(1, min(weeks, 22))
+    anchor = None
+    if start_week is None or season is None:
+        anchor = (s.query(Game).filter(Game.final == False)
+                    .order_by(Game.week, Game.kickoff).first())
+    if season is None:
+        latest = s.query(Game).order_by(Game.season.desc()).first()
+        season = anchor.season if anchor else (latest.season if latest else None)
+    if start_week is None:
+        start_week = anchor.week if anchor else 1
+
+    out_weeks = []
+    if season is not None:
+        for wk in range(start_week, start_week + weeks):
+            games = (s.query(Game).filter(Game.season == season, Game.week == wk)
+                       .order_by(Game.kickoff).all())
+            rows = []
+            for g in games:
+                snap = closing_snapshot(s, g)
+                home_wp, src = None, None
+                if snap and snap.ml_home is not None and snap.ml_away is not None:
+                    home_wp, src = devig_two_way(snap.ml_home, snap.ml_away), "ml"
+                elif snap and snap.spread_home_line is not None:
+                    home_wp, src = wp_from_spread(snap.spread_home_line), "spread"
+                away_wp = round(1 - home_wp, 4) if home_wp is not None else None
+                rows.append({
+                    "game_id": g.id, "week": wk, "kickoff": g.kickoff.isoformat(),
+                    "home": g.home, "away": g.away, "final": g.final,
+                    "home_score": g.home_score, "away_score": g.away_score,
+                    "home_wp": round(home_wp, 4) if home_wp is not None else None,
+                    "away_wp": away_wp, "wp_source": src,
+                    "spread_home": snap.spread_home_line if snap else None})
+            out_weeks.append({"week": wk, "games": rows})
+    return {"season": season, "start_week": start_week, "weeks": out_weeks}
+
+
 @app.get("/data/trends")
 def trends(season: Optional[int] = None, s: Session = Depends(db)):
     """Season-wide situational splits from real graded games."""
@@ -897,6 +967,12 @@ def picks_board():
 def explorer():
     from explorer_page import EXPLORER_HTML
     return EXPLORER_HTML
+
+
+@app.get("/survivor", response_class=HTMLResponse)
+def survivor_helper():
+    from survivor_page import SURVIVOR_HTML
+    return SURVIVOR_HTML
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1050,6 +1126,7 @@ td.rank{font-weight:900;width:4.6rem}
 <header>
   <div class="logo">CLOSING<span>LINE</span></div>
   <nav>
+    <a href="/survivor">Survivor</a>
     <a href="/explorer">Explorer</a>
     <a href="/picks-board">Make Picks</a>
     <a href="/docs">API</a>

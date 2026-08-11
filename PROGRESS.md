@@ -2,6 +2,25 @@
 
 ## Task board (specs in HANDOFF.md)
 
+- [x] SURVIVOR HELPER — DONE 2026-08-10 (owner use case: he + friend Mark have
+       3 Circa Survivor 2026 entries; $20M pool, straight-up/moneyline,
+       tie=elimination, one team per entry). New page /survivor + endpoint
+       /data/survivor + helpers devig_two_way()/wp_from_spread(). Ranks teams
+       by DE-VIGGED MARKET win probability (moneyline; spread fallback) — the
+       market beat our model at picking winners, so market is the primary
+       survivor signal. Features: 3-entry manager w/ used-team tracking
+       (localStorage), win% tier pills (SAFE/SOLID/LEAN/RISKY), future-value
+       "save for Wk X" flags, estimated pick-popularity bars (labeled est.,
+       no field data yet), 3-entry diversified portfolio suggestion, multi-week
+       planner, Sep-12 reg countdown, + a HOME-FIELD LEAN slider (0-5%, default
+       +1.5%) that re-ranks home favorites above road favorites while the honest
+       market win% still shows on each pill (labeled a subjective lean, not an
+       edge — market already prices HFA). Matches board's broadcast/Vegas-dark
+       theme. RG footer + no-hype guard enforced. 17 new tests in test_all.py
+       (ALL PASS). Private design preview (mock data) artifact shared w/ owner.
+       NOT deployed yet — awaiting owner OK (push to main auto-deploys to prod).
+       NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
+       pick-popularity feed; optional EndZone model win-prob as a cross-check column.
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,
