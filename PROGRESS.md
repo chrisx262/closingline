@@ -16,7 +16,12 @@
        +1.5%) that re-ranks home favorites above road favorites while the honest
        market win% still shows on each pill (labeled a subjective lean, not an
        edge — market already prices HFA). Matches board's broadcast/Vegas-dark
-       theme. RG footer + no-hype guard enforced. 17 new tests in test_all.py
+       theme. RG footer + no-hype guard enforced. 2026-08-13 added: HOLIDAY-LEG
+       PROTECTION (Circa Thanksgiving Wk12 / Christmas Wk16) — panel with real
+       matchups + each team's market win% (favorite highlighted, fetched for
+       weeks 12/16), per-entry "still open" counter, ★ for both-leg teams, and
+       weekly-board RED outline/flag + toast on holiday-leg teams so you don't
+       burn them early. 18 new tests in test_all.py
        (ALL PASS). Private design preview (mock data) artifact shared w/ owner.
        NOT deployed yet — awaiting owner OK (push to main auto-deploys to prod).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
