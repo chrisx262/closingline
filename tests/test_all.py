@@ -310,6 +310,9 @@ check("survivor page has no hype language",
       not any(w in sp.text.lower() for w in ("guaranteed", "can't-miss", "lock of")))
 check("survivor page has the home-field lean control",
       'id="lean"' in sp.text and "Home-field lean" in sp.text)
+check("survivor page has holiday-leg protection",
+      "HOLIDAY_LEGS" in sp.text and "Thanksgiving Leg" in sp.text
+      and "Christmas Leg" in sp.text)
 
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

@@ -114,6 +114,7 @@ h2 em{font-style:normal;color:var(--up)}
   opacity:0;animation:fadeUp .45s ease forwards;transition:transform .15s,opacity .2s}
 .pick:hover{transform:translateY(-2px)}
 .pick.used{opacity:.42;filter:grayscale(.5)}
+.pick.holiday{border-color:var(--down);box-shadow:0 0 0 1px color-mix(in srgb,var(--down) 35%,transparent)}
 .rank{font-weight:900;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
 .matchup{min-width:0}
 .mteam{display:flex;align-items:center;gap:.5rem}
@@ -130,6 +131,25 @@ h2 em{font-style:normal;color:var(--up)}
 .flag.used{color:var(--down);border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
 .flag.home{color:var(--up);border-color:color-mix(in srgb,var(--up) 45%,var(--line))}
 .flag.road{color:var(--dim)}
+.flag.hol{color:var(--down);border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
+/* holiday legs panel */
+.hleg{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.85rem 1rem;box-shadow:var(--shadow);margin-bottom:.7rem}
+.hleg .htop{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.4rem}
+.hleg .hname{font-weight:900;font-size:.95rem}
+.hleg .hwhen{color:var(--dim);font-size:.7rem;font-weight:700}
+.hleg .havail{font-weight:900;font-size:.6rem;letter-spacing:.06em;text-transform:uppercase}
+.hgames{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.45rem;margin-top:.6rem}
+.hgame{display:flex;flex-direction:column;gap:.15rem;background:var(--panel2);
+  border:1px solid var(--line);border-radius:7px;padding:.4rem .5rem}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.hat{color:var(--dim);font-size:.52rem;font-weight:800;text-align:center;line-height:.5;opacity:.65}
+.hwp{font-style:normal;font-weight:900;font-size:.66rem;font-variant-numeric:tabular-nums;color:var(--dim)}
+.hwp.fav{color:var(--up)}
+.hteam{display:inline-flex;align-items:center;gap:.2rem;font-weight:800;font-size:.66rem;
+  color:#fff;padding:.24rem .48rem;border-radius:6px}
+.hteam.spent{opacity:.32;text-decoration:line-through}
+.hteam .dbl{font-size:.62rem;line-height:1}
 .pop{display:flex;align-items:center;gap:.4rem;margin-top:.4rem;
   font-size:.62rem;color:var(--dim);font-weight:700}
 .popbar{width:88px;height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}
@@ -260,6 +280,14 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 </section>
 
 <section>
+  <h2>Holiday <em>Legs</em> — don't burn these</h2>
+  <p class="subnote">The Thanksgiving & Christmas legs only let you pick from the teams playing
+  those days. Keep at least one strong option unused for each. Showing the <b>active entry</b>;
+  a leg turns red when you're down to your last couple of options.</p>
+  <div id="holidays"></div>
+</section>
+
+<section>
   <h2>Multi-week <em>Planner</em></h2>
   <p class="subnote">Top available survival options each week, so you can save premium teams
   and keep unused teams for the holiday legs. Struck-through = already used by an entry.</p>
@@ -303,24 +331,35 @@ NO:'#D3BC8D',NYG:'#0B2265',NYJ:'#125740',PHI:'#004C54',PIT:'#FFB612',SF:'#AA0000
 SEA:'#002244',TB:'#D50A0A',TEN:'#0C2340',WAS:'#5A1414',WSH:'#5A1414'};
 function tcol(t){return TC[t]||'#475569';}
 
+/* ---------- Circa 2026 holiday legs (only these teams are pickable those days) ---------- */
+var HOLIDAY_LEGS=[
+ {name:'Thanksgiving Leg',emoji:'🦃',when:'Wk 12 · Wed 11/25 – Fri 11/27',
+  games:[['GB','LA'],['CHI','DET'],['PHI','DAL'],['KC','BUF'],['DEN','PIT']]},
+ {name:'Christmas Leg',emoji:'🎄',when:'Wk 16 · Thu 12/24 – Fri 12/25',
+  games:[['HOU','PHI'],['GB','CHI'],['BUF','DEN'],['LA','SEA']]}
+];
+function teamsInLeg(leg){var s={};leg.games.forEach(function(g){s[g[0]]=1;s[g[1]]=1;});return Object.keys(s);}
+function holidayLegsFor(team){return HOLIDAY_LEGS.filter(function(l){return teamsInLeg(l).indexOf(team)>=0;});}
+
 /* ---------- entry state ---------- */
 var EK='survivor_entries_v1', AK='survivor_active_v1';
 function entries(){try{return JSON.parse(localStorage.getItem(EK))||{1:[],2:[],3:[]}}catch(e){return{1:[],2:[],3:[]}}}
 function saveEntries(e){localStorage.setItem(EK,JSON.stringify(e))}
 function active(){return localStorage.getItem(AK)||'1'}
-function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderPlanner()}
+function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner()}
 function usedBy(n){return entries()[n]||[]}
 function usedAny(t){var e=entries();return['1','2','3'].some(function(n){return e[n].indexOf(t)>=0})}
 
 function useTeam(team,n){
   var e=entries();if(e[n].indexOf(team)>=0)return;
   e[n].push(team);saveEntries(e);
-  toast(team+' → Entry '+n);
-  renderEntries();renderBoard();renderPortfolio();renderPlanner();
+  var hl=holidayLegsFor(team);
+  toast(team+' → Entry '+n+(hl.length?' — note: plays the '+hl.map(function(l){return l.name;}).join(' & '):''));
+  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
 }
 function dropTeam(team,n){
   var e=entries();e[n]=e[n].filter(function(t){return t!==team});saveEntries(e);
-  renderEntries();renderBoard();renderPortfolio();renderPlanner();
+  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
 }
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
   t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},1600)}
@@ -349,14 +388,57 @@ function setLean(v){LEAN=parseFloat(v);localStorage.setItem(LK,String(LEAN));
 
 /* ---------- data ---------- */
 var DATA=null, WEEKS=[], curIdx=0, PREVIEW=false;
+var HOLWP={};                                  // "AWAY@HOME" -> {aw, hw} for holiday games
+function indexHol(weeksArr){
+  (weeksArr||[]).forEach(function(w){(w.games||[]).forEach(function(g){
+    if(g.home_wp!=null)HOLWP[g.away+'@'+g.home]={aw:g.away_wp,hw:g.home_wp};});});
+}
 async function load(){
   var url=PREVIEW?'/data/survivor?season=2025&start_week=6&weeks=8':'/data/survivor?weeks=8';
   try{DATA=await (await fetch(url)).json();}catch(e){DATA={weeks:[]};}
   WEEKS=(DATA.weeks||[]).filter(function(w){return w.games&&w.games.length;});
+  indexHol(DATA.weeks);
   curIdx=0;
   renderAll();
+  // holiday legs are weeks 12 & 16 — usually outside the 8-week board window, so
+  // pull those weeks' win probs on their own (fills in once the market posts them).
+  if(!PREVIEW){[12,16].forEach(function(wk){
+    fetch('/data/survivor?start_week='+wk+'&weeks=1'+(DATA.season?'&season='+DATA.season:''))
+      .then(function(r){return r.json();}).then(function(d){indexHol(d.weeks);renderHolidays();})
+      .catch(function(){});
+  });}
 }
-function renderAll(){renderEntries();renderBoard();renderPortfolio();renderPlanner();}
+function renderAll(){renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();}
+
+function renderHolidays(){
+  var act=active(), used=usedBy(act), el=document.getElementById('holidays'), h='';
+  function chip(t){
+    var spent=used.indexOf(t)>=0;
+    var dbl=holidayLegsFor(t).length>1?'<span class="dbl" title="plays BOTH holiday legs">★</span>':'';
+    return '<span class="hteam'+(spent?' spent':'')+'" style="background:'+tcol(t)+'">'+t+dbl+'</span>';
+  }
+  HOLIDAY_LEGS.forEach(function(leg){
+    var teams=teamsInLeg(leg);
+    var avail=teams.filter(function(t){return used.indexOf(t)<0;}).length;
+    var warn=avail<=2;
+    var rows=leg.games.map(function(g){          // g = [away, home]
+      var wp=HOLWP[g[0]+'@'+g[1]];
+      var aw=wp?Math.round(wp.aw*100):null, hw=wp?Math.round(wp.hw*100):null;
+      var favA=(aw!=null&&hw!=null&&aw>hw), favH=(aw!=null&&hw!=null&&hw>=aw);
+      function pct(v,fav){return '<i class="hwp'+(fav?' fav':'')+'">'+(v!=null?v+'%':'—')+'</i>';}
+      return '<div class="hgame">'+
+        '<div class="hrow">'+chip(g[0])+pct(aw,favA)+'</div>'+
+        '<div class="hat">@</div>'+
+        '<div class="hrow">'+chip(g[1])+pct(hw,favH)+'</div></div>';
+    }).join('');
+    h+='<div class="hleg"><div class="htop"><span class="hname">'+leg.emoji+' '+leg.name+'</span>'+
+       '<span class="hwhen">'+leg.when+'</span>'+
+       '<span class="havail" style="color:'+(warn?'var(--down)':'var(--up)')+'">'+avail+' of '+teams.length+
+       ' still open · E'+act+'</span></div><div class="hgames">'+rows+'</div></div>';
+  });
+  el.innerHTML=h+'<p class="subnote" style="margin-top:.4rem">Each box is a game (away @ home) — only these '+
+    'teams are pickable on the leg. ★ = plays BOTH legs. Struck-through = already used by Entry '+act+'.</p>';
+}
 
 /* teams for a week as {team,opp,wp,home,gid} sorted by wp desc, wp!=null */
 function weekTeams(w){
@@ -421,8 +503,11 @@ function renderBoard(){
     if(!used&&LEAN>0&&p.wp>=0.5)
       flags+=p.home?('<span class="flag home">home lean +'+(LEAN*100).toFixed(1)+'%</span>')
                    :('<span class="flag road">road −'+(LEAN*100).toFixed(1)+'%</span>');
+    var hl=holidayLegsFor(p.team);
+    if(!used&&hl.length)flags+='<span class="flag hol" title="only teams playing that day are pickable on the leg — think twice before using this early">'+
+      hl.map(function(l){return l.emoji;}).join('')+' holiday-leg team</span>';
     var pop=pops[i];
-    h+='<div class="pick'+(used?' used':'')+'">'+
+    h+='<div class="pick'+(used?' used':'')+((!used&&hl.length)?' holiday':'')+'">'+
        '<div class="rank">'+(i+1)+'</div>'+
        '<div class="matchup"><div class="mteam"><span class="tchip" style="background:'+tcol(p.team)+
        '">'+p.team+'</span><b>'+p.team+'</b><span class="vs">'+(p.home?'vs':'@')+' '+p.opp+'</span></div>'+
