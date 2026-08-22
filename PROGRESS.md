@@ -23,7 +23,8 @@
        weekly-board RED outline/flag + toast on holiday-leg teams so you don't
        burn them early. 18 new tests in test_all.py
        (ALL PASS). Private design preview (mock data) artifact shared w/ owner.
-       NOT deployed yet — awaiting owner OK (push to main auto-deploys to prod).
+       DEPLOYED — verified live 2026-08-21 at https://www.closinglinehq.com/survivor
+       (200, holiday-leg panel + RG footer + home-field lean all present in prod).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
        pick-popularity feed; optional EndZone model win-prob as a cross-check column.
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
@@ -44,8 +45,64 @@
        streak pills, motion (CSS-only, reduced-motion safe). Includes
        task 11 v1: data-driven smack ticker (platform-generated only).
        SEO: canonical -> closinglinehq.com, OG/Twitter cards. 67 checks.
-- [x] DOMAIN: closinglinehq.com live on Railway (custom domain + DNS
-       verified 2026-07-19); canonical URL for SEO.
+- [x] DOMAIN: closinglinehq.com LIVE — but the "verified 2026-07-19" claim
+       here was WRONG for a month. Reality: the `_railway-verify.www` TXT
+       record was never added, so the cert never issued and the domain served
+       a Railway fallback 404 the whole time. Fixed 2026-08-21: TXT added at
+       GoDaddy, then a stuck Railway cert order (a known recurring Railway
+       defect — `certificate retry` refuses while status is
+       VALIDATING_OWNERSHIP) was forced through with the
+       `customDomainIssueCertificate` GraphQL mutation against
+       backboard.railway.com/graphql/v2. Now: Verified yes, LE cert
+       CN=www.closinglinehq.com, apex forwards to www, 200 end-to-end.
+       Apex custom-domain registration deleted (CNAME-at-zone-apex is
+       impossible; GoDaddy forwarding handles it).
+- [~] CIRCA MILLIONS (branch `circa-millions`, 2026-08-22) — IN PROGRESS.
+       Owner context: Chris is NOT entering; Mark entered and Chris is weighing
+       buying 10% ($100). Overlay math researched: contest needs 6,000 entries
+       to cover its $6M guarantee and missed 2 yrs running (5,817 in '24 =>
+       +3.1% EV/entry; 5,685 in '25 => +5.5%), BUT only ~126 of ~5,700 entries
+       cash => ~98% chance of $0. Slightly-better-than-fair lottery, not an
+       investment. Nothing we build changes Chris's EV — MARK makes the picks.
+       DESIGN DECISION: this is a LINE-VALUE model, NOT an outcome predictor.
+       The 2026-08-10 research killed ATS prediction (48.7%, -7% ROI). Circa
+       posts STATIC contest lines Thu 10am PT and picks lock Sat 4pm PT, so the
+       number is frozen ~54h while the market moves. Edge = Circa's frozen line
+       vs market consensus/close. That is exactly CLV, which this platform
+       already computes.
+       DONE: `loaders/circa_sheet.py` — fetch/render/OCR/validate. 22 new checks
+       in test_all.py (ALL PASS). Dockerfile now installs tesseract-ocr +
+       poppler-utils.
+       KEY FINDINGS (do not re-derive):
+         * Circa's sheet PDFs have NO text layer — zero fonts, zero text ops,
+           ~15k vector path ops. Team names and numbers are vector OUTLINES.
+           No PDF library will ever extract them. OCR is the only route.
+         * Sheets are public, no login:
+           circasports.com/wp-content/uploads/YYYY/MM/Circa-Sports-Million-<ROMAN>-Contest-Point-Spreads-Week-<N>.pdf
+         * PAIR GAMES BY CIRCA'S OWN 1-32 CONTESTANT NUMBERS (consecutive
+           odd/even). Pairing by matching spread values silently mis-pairs
+           unrelated teams — it produced "TEXANS vs PACKERS" in testing.
+         * The half-point is the ONLY unreliable field. Circa renders a true
+           U+00BD glyph, taller than the digits and below the baseline;
+           tesseract emits % ) ? ; or merges it into a digit (3.5 -> 37) or
+           drops it. NEVER trust OCR alone for it — the mirror rule + explicit
+           flagging is what keeps a wrong half-point out of a pick.
+         * macOS gotcha: leptonica will not follow the /tmp -> /private/tmp
+           symlink; pass os.path.realpath() or you get "image file not found"
+           on a file that plainly exists.
+       MEASURED on 5 real Million VI sheets: 56 games parsed, 54 confident
+       (96%), ~2-3 cells/sheet flagged for human confirmation. Failures are
+       always visible, never silent.
+       NEXT: (a) fetcher that finds the current week's PDF from the contest
+       page; (b) two snapshot times — Thu 13:05 ET (line freezes) and Sat 18:45
+       ET (just before lock), ~+26 Odds API credits/mo on top of ~66 of 500;
+       (c) line-value calc reusing snapshot_at()/closing_snapshot(); (d)
+       /circa-millions page + leaderboard; (e) BACKTEST over the public archive
+       to answer whether line value actually beats 52.4% here — publish the
+       result either way per invariant 6. Circa is famously sharp, so a null
+       result is a real possibility and must not be spun.
+       NEEDS OWNER: nothing blocking. Branch is uncommitted to main, not
+       deployed, not pushed.
 - [ ] 5. Explorer line-movement charts (needs multi-snapshot data)
 - [ ] 6. Elo v2: QB-out adjustment + EPA ratings (train ≤2024, blind 2025)
 - [ ] 7. Hardening: rate limiting, MIN_PICKS=30, email unsubscribe/delete,

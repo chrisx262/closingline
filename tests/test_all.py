@@ -314,5 +314,59 @@ check("survivor page has holiday-leg protection",
       "HOLIDAY_LEGS" in sp.text and "Thanksgiving Leg" in sp.text
       and "Christmas Leg" in sp.text)
 
+# ---------------------------------------------------------------- Circa sheet
+# Pure-logic checks on the contest-sheet parser. No OCR here on purpose: the
+# suite must stay fast and deterministic, and the pairing/validation rules are
+# where a wrong half-point would actually reach a pick.
+from loaders.circa_sheet import canon_team, validate
+
+check("circa: canonical team passes through", canon_team("RAVENS") == "RAVENS")
+check("circa: OCR alias AOERS -> 49ERS", canon_team("AOERS") == "49ERS")
+check("circa: near-miss OCR slip recovered", canon_team("PAVENS") == "RAVENS")
+check("circa: junk token rejected", canon_team("XQZP") is None)
+
+# slot map: {contestant_number: (team, sign, int_part, saw_half_glyph)}
+clean = {1: ("CHIEFS", "-", 2, True), 2: ("RAVENS", "+", 2, True)}
+g, prob = validate(clean)
+check("circa: mirrored pair yields one game", len(g) == 1 and not prob)
+check("circa: favorite is the minus side", g[0].favorite == "CHIEFS")
+check("circa: half-point applied from both sides", g[0].line == 2.5)
+check("circa: agreeing pair is confident", g[0].confident is True)
+
+# one side lost its half glyph -> line still recovered, but NOT confident
+lopsided = {1: ("CHIEFS", "-", 2, True), 2: ("RAVENS", "+", 2, False)}
+g2, _ = validate(lopsided)
+check("circa: half recovered from the mirror", g2[0].line == 2.5)
+check("circa: mirror-recovered game flagged for review", g2[0].confident is False)
+
+whole = {1: ("CHARGERS", "-", 3, False), 2: ("RAIDERS", "+", 3, False)}
+g3, _ = validate(whole)
+check("circa: whole-number line stays whole", g3[0].line == 3.0)
+
+# OCR merged the half into a digit (3.5 -> 37): must be flagged, never guessed
+bad_int = {1: ("FALCONS", "-", 3, False), 2: ("STEELERS", "+", 37, False)}
+g4, p4 = validate(bad_int)
+check("circa: integer mismatch produces no game", len(g4) == 0)
+check("circa: integer mismatch is reported", any("mismatch" in m for _, m in p4))
+
+same_sign = {1: ("A", "-", 3, False), 2: ("B", "-", 3, False)}
+same_sign[1] = ("BEARS", "-", 3, False); same_sign[2] = ("TITANS", "-", 3, False)
+g5, p5 = validate(same_sign)
+check("circa: same-sign pair rejected", len(g5) == 0 and len(p5) == 1)
+
+half_pair = {1: ("CHIEFS", "-", 2, True)}
+g6, p6 = validate(half_pair)
+check("circa: unread half of a pair is flagged", len(g6) == 0 and len(p6) == 1)
+
+# bye weeks legitimately leave slots empty - that must NOT raise a problem
+byes = {1: ("CHIEFS", "-", 2, True), 2: ("RAVENS", "+", 2, True)}
+g7, p7 = validate(byes)
+check("circa: empty slots from byes are not flagged", len(p7) == 0)
+
+check("circa: pairing is by consecutive slot numbers, not by value",
+      validate({1: ("CHIEFS", "-", 2, True), 2: ("RAVENS", "+", 2, True),
+                3: ("TEXANS", "-", 2, True), 4: ("COLTS", "+", 2, True)})[0][1].favorite
+      == "TEXANS")
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

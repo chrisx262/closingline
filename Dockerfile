@@ -2,6 +2,12 @@ FROM python:3.12-slim
 WORKDIR /app
 # Stream logs immediately so Railway shows boot/seed output in real time.
 ENV PYTHONUNBUFFERED=1
+# tesseract + poppler: the Circa contest sheet is a PDF with NO text layer
+# (vector outlines only), so reading it requires rendering + OCR. See
+# loaders/circa_sheet.py for why this is unavoidable.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr poppler-utils \
+ && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt psycopg2-binary
 COPY . .
