@@ -93,14 +93,28 @@
        MEASURED on 5 real Million VI sheets: 56 games parsed, 54 confident
        (96%), ~2-3 cells/sheet flagged for human confirmation. Failures are
        always visible, never silent.
-       NEXT: (a) fetcher that finds the current week's PDF from the contest
-       page; (b) two snapshot times — Thu 13:05 ET (line freezes) and Sat 18:45
-       ET (just before lock), ~+26 Odds API credits/mo on top of ~66 of 500;
-       (c) line-value calc reusing snapshot_at()/closing_snapshot(); (d)
-       /circa-millions page + leaderboard; (e) BACKTEST over the public archive
-       to answer whether line value actually beats 52.4% here — publish the
-       result either way per invariant 6. Circa is famously sharp, so a null
-       result is a real possibility and must not be spun.
+       FETCHER DONE: fetch_sheet(season, week) pulls from the public uploads
+       dir; got 53/54 sheets for 2023-2025. Parsed 646 games, 98.3% confident.
+       BACKTEST DONE 2026-08-22 — RESULT: **NO DEMONSTRATED EDGE**. Full
+       writeup in docs/circa_line_value_backtest.md. Summary: picking the 5
+       biggest Circa-vs-CLOSE divergences graded 54.7% ATS, but that is
+       LOOKAHEAD (picks lock Sat 4pm PT; Sunday games have not closed) and
+       violates invariant 3 — it just rediscovers that closing lines predict
+       outcomes. A clean test is impossible on free data: nflverse carries only
+       the closing spread, no opening/intraday. Lookahead-free descriptive
+       stats show Circa is SHARP: mean signed drift vs close = +0.084 pts over
+       646 games (essentially unbiased), median ABS drift 0.50 pts, only 3.7%
+       of games drift >2 pts — roughly 8 games/season in the bucket that graded
+       well, against a 5-picks-every-week requirement. Cannot fill a card even
+       with foresight. Sanity check passed (all sides = exactly 50.0%).
+       DO NOT ship a Circa pick tool that claims an edge.
+       NEXT (only honest path): (a) add the two snapshot times — Thu 13:05 ET
+       (line freezes) and Sat 18:45 ET (just before lock), ~+26 credits/mo on
+       top of ~66 of 500 — plus store Circa's sheet weekly, to measure the
+       KNOWABLE Thu->Sat move live; (b) revisit after 4-6 weeks of real data;
+       (c) page/leaderboard ONLY if that live sample shows something. Paid
+       historical intraday odds (The Odds API sells them) would answer it
+       sooner — owner's call, costs money.
        NEEDS OWNER: nothing blocking. Branch is uncommitted to main, not
        deployed, not pushed.
 - [ ] 5. Explorer line-movement charts (needs multi-snapshot data)

@@ -181,3 +181,66 @@ def validate(slots: dict) -> tuple[list, list]:
 
 def parse_pdf(pdf_path: str) -> tuple[list, list]:
     return validate(read_slots(render(pdf_path)))
+
+
+# ---------------------------------------------------------------- fetching
+# Circa's uploads live under /wp-content/uploads/YYYY/MM/. The month is the
+# month the sheet was POSTED, which for an NFL week is the Thursday before
+# kickoff -- so a week can land in either of two months. We try the plausible
+# ones rather than guessing a single mapping.
+ROMAN = {2019: "I", 2020: "II", 2021: "III", 2022: "IV", 2023: "V",
+         2024: "VI", 2025: "VII", 2026: "VIII"}
+
+SHEET_URL = ("https://www.circasports.com/wp-content/uploads/"
+             "{year}/{month:02d}/Circa-Sports-Million-{roman}-"
+             "Contest-Point-Spreads-Week-{week}.pdf")
+
+
+def candidate_urls(season: int, week: int):
+    """Plausible URLs for one week's sheet, most likely first."""
+    roman = ROMAN.get(season)
+    if not roman:
+        return []
+    # NFL week -> (calendar year, month) the sheet was most likely posted in
+    if week <= 4:
+        guesses = [(season, 9), (season, 10)]
+    elif week <= 8:
+        guesses = [(season, 10), (season, 9), (season, 11)]
+    elif week <= 13:
+        guesses = [(season, 11), (season, 10), (season, 12)]
+    elif week <= 17:
+        guesses = [(season, 12), (season, 11), (season + 1, 1)]
+    else:
+        guesses = [(season + 1, 1), (season, 12)]
+    return [SHEET_URL.format(year=y, month=m, roman=roman, week=week)
+            for y, m in guesses]
+
+
+def fetch_sheet(season: int, week: int, dest_dir: str = "/tmp/circa") -> Optional[str]:
+    """Download one week's sheet. Returns the local path, or None if absent.
+
+    Uses only the public uploads directory -- no login, no scraping of a
+    contestant area.
+    """
+    # requests, not urllib: urllib uses the system trust store, which on macOS
+    # has no CA bundle for this interpreter and fails every https call with
+    # CERTIFICATE_VERIFY_FAILED. requests ships certifi and just works.
+    import requests
+
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, f"million_{season}_wk{week:02d}.pdf")
+    if os.path.exists(dest) and os.path.getsize(dest) > 10000:
+        return dest
+
+    for url in candidate_urls(season, week):
+        try:
+            r = requests.get(url, timeout=30, headers={
+                "User-Agent": "Mozilla/5.0 (ClosingLine backtest)"})
+            if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+                continue
+            with open(dest, "wb") as fh:
+                fh.write(r.content)
+            return dest
+        except requests.RequestException:
+            continue
+    return None
