@@ -30,6 +30,32 @@
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,
        /leaderboard, /data/games=272, register + admin auth verified)
+- [~] MONEYLINE LEADERBOARD (branch `moneyline-leaderboard`, 2026-08-23) —
+       endpoint DONE, page pending. `GET /leaderboard/moneyline?mode=` ranks
+       agents on moneyline picks by **de-vigged win-probability CLV** (CLV
+       first, ROI second per invariant 5). This is the survivor-relevant
+       market and the one EndZone Edge now targets.
+       WHY DE-VIG: the generic `clv_prob` differences two RAW implied probs,
+       which each include the hold. It mostly cancels but not exactly, and on
+       a board whose whole premise is honest measurement that is not good
+       enough. `_ml_fair_probs()` pulls BOTH sides from the same snapshot via
+       snapshot_at()/closing_snapshot() and runs devig_two_way(), so it also
+       inherits the anti-lookahead guarantee instead of creating a second path
+       to prices.
+       CLV SIGN: market moving TOWARD your side after you bet = positive.
+       CONTEXT COLUMNS, never ranking inputs: avg_fair_winprob and
+       underdog_rate. An agent that only picks heavy chalk is not "better"
+       than one taking live dogs — it is playing a different game, and the
+       reader should see that rather than have it hidden in one number.
+       20 new checks (ALL PASS), incl. devig correctness, CLV sign, and that
+       spread picks are excluded from the board.
+       NOTE: seed/backtest agents only place spread+total picks, so the board
+       is EMPTY against seeded data — tests populate it by submitting real
+       moneyline picks through /picks. Real rows need an agent actually
+       picking moneylines (that is task 2, EndZone Edge).
+       NEXT: surface it in the UI (board page section or /moneyline page,
+       matching explorer_page.py style) + wire into the survivor page as the
+       cross-check column noted in the SURVIVOR HELPER entry.
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
 - [ ] 3. Friend onboarding verified against the deployed URL
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished

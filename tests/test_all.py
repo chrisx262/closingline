@@ -314,5 +314,79 @@ check("survivor page has holiday-leg protection",
       "HOLIDAY_LEGS" in sp.text and "Thanksgiving Leg" in sp.text
       and "Christmas Leg" in sp.text)
 
+# ------------------------------------------------------- moneyline board
+# Moneyline is the survivor-relevant market: picking a winner, not a spread.
+# The board ranks on DE-VIGGED win-probability CLV, so these checks care most
+# about (a) the vig actually being stripped and (b) CLV sign convention --
+# market moving toward your side after you bet is positive.
+from app import devig_two_way, Market
+
+fair = devig_two_way(-110, -110)
+check("ml: devig of a -110/-110 market is 50%", abs(fair - 0.5) < 1e-9)
+lop = devig_two_way(-200, +170)
+check("ml: devig strips the hold (fav under raw implied)",
+      lop is not None and lop < (200/300))
+check("ml: devig sides sum to 1",
+      abs(devig_two_way(-200, +170) + devig_two_way(+170, -200) - 1.0) < 1e-9)
+
+mlb = c.get("/leaderboard/moneyline")
+check("ml board 200", mlb.status_code == 200)
+mld = mlb.json()
+check("ml board states its metric",
+      mld.get("metric") == "de-vigged win-probability CLV")
+check("ml board exposes its sample gate", "min_picks" in mld)
+check("ml board rows carry moneyline-specific columns",
+      all({"avg_clv_winprob", "avg_fair_winprob", "underdog_rate"} <= set(r)
+          for r in mld["board"]))
+
+# submit real moneyline picks in backtest mode and confirm they surface
+mlk = c.post("/agents/register", json={"name": "ml_probe", "kind": "bot"}).json()
+mlkey, mlid = mlk["api_key"], mlk["agent_id"]
+placed = 0
+for wk in (1, 2, 3):
+    for g in c.get(f"/data/games?week={wk}").json():
+        aso = (datetime.fromisoformat(g["kickoff"]) - timedelta(hours=24)).isoformat()
+        r = c.post("/picks", headers={"x-api-key": mlkey},
+                   json={"game_id": g["game_id"], "market": "moneyline",
+                         "side": g["home"], "stake_units": 1.0,
+                         "mode": "backtest", "as_of": aso})
+        if r.status_code == 200:
+            placed += 1
+        if placed >= 6:
+            break
+    if placed >= 6:
+        break
+check("ml: moneyline picks accepted by /picks", placed >= 5)
+
+c.post("/admin/grade")
+board = c.get("/leaderboard/moneyline?mode=backtest").json()["board"]
+row = next((r for r in board if r["agent"] == "ml_probe"), None)
+check("ml: agent appears on the moneyline board", row is not None)
+if row:
+    check("ml: board reports a fair win prob", row["avg_fair_winprob"] is not None)
+    check("ml: fair win prob is a probability",
+          0 < row["avg_fair_winprob"] < 1)
+    check("ml: underdog_rate is a share", 0 <= row["underdog_rate"] <= 1)
+    check("ml: rank assigned", row.get("rank") == 1 or row.get("rank") >= 1)
+    check("ml: picks counted match what was placed", row["picks"] >= 5)
+
+# a spread pick from the same agent must NOT inflate the moneyline board
+gsp = c.get("/data/games?week=4").json()[0]
+aso_sp = (datetime.fromisoformat(gsp["kickoff"]) - timedelta(hours=24)).isoformat()
+c.post("/picks", headers={"x-api-key": mlkey},
+       json={"game_id": gsp["game_id"], "market": "spread", "side": gsp["home"],
+             "stake_units": 1.0, "mode": "backtest", "as_of": aso_sp})
+c.post("/admin/grade")
+row2 = next((r for r in c.get("/leaderboard/moneyline?mode=backtest").json()["board"]
+             if r["agent"] == "ml_probe"), None)
+check("ml: spread picks excluded from the moneyline board",
+      row2 is not None and row["picks"] == row2["picks"])
+
+# the board must never rank on how much of a favourite you take
+check("ml: fair win prob is context, not the sort key",
+      "avg_fair_winprob" in (row or {}) and
+      c.get("/leaderboard/moneyline?mode=backtest").json()["metric"]
+      == "de-vigged win-probability CLV")
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

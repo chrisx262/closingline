@@ -627,6 +627,98 @@ def best_bets_board(mode: str = Query("live"), s: Session = Depends(db)):
             "board": out}
 
 
+# ---------------------------------------------------------------- moneyline
+# Moneyline is the market that matters for survivor-style play: you are picking
+# a WINNER, not a spread. The 2026-08-10 research found free data cannot beat
+# ATS but market-derived win probability is genuinely useful, so this board
+# ranks on de-vigged win-probability CLV rather than points of line value.
+#
+# Why de-vig here when the generic clv_prob does not: raw implied probabilities
+# include the hold, so a "40% shot" priced at +150 is really nearer 38% fair.
+# Comparing two vigged numbers mostly cancels, but not exactly, and on a board
+# whose entire premise is honest measurement the approximation is not good
+# enough. devig_two_way() strips it using both sides of the same snapshot.
+ML_MIN_PICKS = int(os.environ.get("ML_MIN_PICKS", str(MIN_PICKS_FOR_BOARD)))
+
+
+def _ml_fair_probs(s: Session, pick: Pick):
+    """(fair win prob when the pick was made, fair prob at close).
+
+    Both come from snapshot_at()/closing_snapshot(), so this inherits the
+    anti-lookahead guarantee rather than inventing a second path to prices.
+    """
+    game = s.get(Game, pick.game_id)
+    if game is None:
+        return None, None
+    at_pick = snapshot_at(s, pick.game_id, pick.submitted_at)
+    at_close = closing_snapshot(s, game)
+
+    def fair(snap):
+        if snap is None or snap.ml_home is None or snap.ml_away is None:
+            return None
+        home_fair = devig_two_way(snap.ml_home, snap.ml_away)
+        if home_fair is None:
+            return None
+        return home_fair if pick.side == game.home else 1.0 - home_fair
+
+    return fair(at_pick), fair(at_close)
+
+
+def _ml_agg(s: Session, rows):
+    """Aggregate a set of moneyline picks into board columns."""
+    base = _agg(rows)
+    clvs, taken, dogs = [], [], 0
+    for p in rows:
+        at_pick, at_close = _ml_fair_probs(s, p)
+        if at_pick is not None:
+            taken.append(at_pick)
+            if at_pick < 0.5:
+                dogs += 1
+        if at_pick is not None and at_close is not None:
+            # market moving TOWARD your side after you bet = you got value
+            clvs.append(at_close - at_pick)
+    n = len(rows)
+    base.update({
+        "avg_clv_winprob": round(sum(clvs) / len(clvs), 4) if clvs else None,
+        "clv_sample": len(clvs),
+        "avg_fair_winprob": round(sum(taken) / len(taken), 4) if taken else None,
+        "underdog_rate": round(dogs / n, 3) if n else None,
+        "beat_close_pct": (round(100 * sum(1 for c in clvs if c > 0) / len(clvs), 1)
+                           if clvs else None),
+    })
+    return base
+
+
+@app.get("/leaderboard/moneyline")
+def moneyline_board(mode: str = Query("live"), s: Session = Depends(db)):
+    """Rank agents on moneyline picks by de-vigged win-probability CLV.
+
+    CLV first, ROI second (invariant 5). `avg_fair_winprob` and
+    `underdog_rate` are context, never ranking inputs: an agent that only
+    picks heavy favourites is not better than one taking live dogs, it is
+    playing a different game, and the board should let a reader see that
+    instead of hiding it behind a single number.
+    """
+    out = []
+    for a in s.query(Agent).all():
+        rows = (s.query(Pick).filter(
+            Pick.agent_id == a.id, Pick.mode == mode,
+            Pick.market == Market.moneyline.value,
+            Pick.result != "pending").all())
+        if len(rows) < ML_MIN_PICKS:
+            continue
+        streak, _ = _streaks(rows)
+        out.append({"agent_id": a.id, "agent": a.name, "kind": a.kind,
+                    "streak": streak, **_ml_agg(s, rows)})
+
+    out.sort(key=lambda r: ((r["avg_clv_winprob"] if r["avg_clv_winprob"]
+                             is not None else -99), r["roi_pct"]), reverse=True)
+    for i, r in enumerate(out, 1):
+        r["rank"] = i
+    return {"mode": mode, "min_picks": ML_MIN_PICKS, "board": out,
+            "metric": "de-vigged win-probability CLV"}
+
+
 @app.get("/agents/{agent_id}/report")
 def report_card(agent_id: int, mode: str = Query("backtest"),
                 s: Session = Depends(db)):
