@@ -73,6 +73,33 @@ That measures the *knowable* Thursday→Saturday move — the only version of th
 signal a picker could actually act on. Cost is ~26 Odds API credits/month on
 top of the current ~66 of 500. After 4–6 weeks there is a real sample.
 
+## Cost of buying the answer instead
+
+`loaders/circa_historical.py` is ready to run. Verified 2026-08-22:
+
+- The Odds API historical endpoint is **paid-only** on any plan above free
+  (confirmed by probe: `HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN`, HTTP 401,
+  which costs 0 credits — the probe is free to run).
+- Historical costs 10 credits per region per market vs 1 live; one call
+  returns every game at that timestamp.
+- 3 seasons x 18 weeks x 2 timestamps (Thu freeze + Sat lock) = 108 calls.
+  At 1 market that is 1,080 credits; at 3 markets, 3,240.
+- The 20K plan is **$30/month** = 20,000 credits. The full pull uses 16% of a
+  single month. It is a one-time historical pull: subscribe, run, cancel.
+- Ongoing live capture stays FREE — current-odds calls are 3 credits, so the
+  two extra weekly snapshots are ~26/month against the free tier's 500.
+
+Run `python loaders/circa_historical.py probe` FIRST after subscribing. It
+spends one call to confirm the archive returns real data for an old timestamp
+before committing to the full pull. Coverage for 2023-2025 is documented
+(5-minute snapshots from Sept 2022) but UNVERIFIED — the free tier is rejected
+before any data is returned, so it could not be checked without paying.
+
+Expectation management: given Circa's mean signed drift versus the close is
++0.084 pts, the knowable Thu->Sat portion is likely SMALLER than the total
+drift already measured. The $30 most likely buys a firm negative rather than
+an edge. Worth it to know definitively; not worth it as a hope.
+
 Until that exists, **no Circa Millions pick tool should claim an edge**, and
 nothing here should inform the owner's decision about buying into an entry.
 The only established edge in this contest remains the structural overlay
