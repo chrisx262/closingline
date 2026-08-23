@@ -93,30 +93,30 @@
        MEASURED on 5 real Million VI sheets: 56 games parsed, 54 confident
        (96%), ~2-3 cells/sheet flagged for human confirmation. Failures are
        always visible, never silent.
-       FETCHER DONE: fetch_sheet(season, week) pulls from the public uploads
-       dir; got 53/54 sheets for 2023-2025. Parsed 646 games, 98.3% confident.
-       BACKTEST DONE 2026-08-22 — RESULT: **NO DEMONSTRATED EDGE**. Full
-       writeup in docs/circa_line_value_backtest.md. Summary: picking the 5
-       biggest Circa-vs-CLOSE divergences graded 54.7% ATS, but that is
-       LOOKAHEAD (picks lock Sat 4pm PT; Sunday games have not closed) and
-       violates invariant 3 — it just rediscovers that closing lines predict
-       outcomes. A clean test is impossible on free data: nflverse carries only
-       the closing spread, no opening/intraday. Lookahead-free descriptive
-       stats show Circa is SHARP: mean signed drift vs close = +0.084 pts over
-       646 games (essentially unbiased), median ABS drift 0.50 pts, only 3.7%
-       of games drift >2 pts — roughly 8 games/season in the bucket that graded
-       well, against a 5-picks-every-week requirement. Cannot fill a card even
-       with foresight. Sanity check passed (all sides = exactly 50.0%).
-       DO NOT ship a Circa pick tool that claims an edge.
-       NEXT (only honest path): (a) add the two snapshot times — Thu 13:05 ET
-       (line freezes) and Sat 18:45 ET (just before lock), ~+26 credits/mo on
-       top of ~66 of 500 — plus store Circa's sheet weekly, to measure the
-       KNOWABLE Thu->Sat move live; (b) revisit after 4-6 weeks of real data;
-       (c) page/leaderboard ONLY if that live sample shows something. Paid
-       historical intraday odds (The Odds API sells them) would answer it
-       sooner — owner's call, costs money.
-       NEEDS OWNER: nothing blocking. Branch is uncommitted to main, not
-       deployed, not pushed.
+       FETCHER DONE: fetch_sheet() pulls the public archive (53/54 sheets,
+       2023-2025); 646 games parsed, 98.3% confident.
+       BACKTEST FINAL 2026-08-22 — **NO EDGE, AND NOT PROVABLE**. Owner paid
+       $30 for one month of The Odds API 20K plan; 132 historical snapshots
+       pulled (1,330 of 20,000 credits). Lookahead-free test: Circa's frozen
+       Thursday line vs the market at the SATURDAY 6:45pm ET lock, graded ATS
+       against Circa's own number, 590 games.
+       RESULT: contest-format top-5-per-week = 53.7% (137-118), p=0.359 vs the
+       52.4% break-even. EVERY bucket p>0.05; every 95% CI contains 50%. The
+       0.5pt bucket grades 49.7%, BELOW break-even, which breaks any monotonic
+       story. Sanity check passed (all sides = exactly 50.0%).
+       KILLER STAT: proving a 53.7% edge at p<0.05 needs ~12,610 picks = ~140
+       SEASONS of a 5-pick-per-week contest. Even if real, it is unverifiable
+       and unexploitable at the sample sizes this contest produces.
+       WHY: Circa's contest line IS the market at freeze time — median
+       |Circa - market| Thursday = 0.00 pts. It drifts to a 0.50 median by
+       Saturday. Half a point is not enough.
+       DECISION: DO NOT build the /circa-millions pick page or leaderboard.
+       Only established edge = the structural OVERLAY (~+3-5% EV/entry), which
+       needs no model. Full writeup: docs/circa_line_value_backtest.md.
+       NEEDS OWNER: **CANCEL the Odds API paid plan** (next invoice Sep 22
+       2026) — one-time pull, nothing ongoing needs it. Free tier covers the
+       live season. Raw snapshots in /tmp/circa_hist (10MB) — move if the
+       question should ever be revisited without paying again.
 - [ ] 5. Explorer line-movement charts (needs multi-snapshot data)
 - [ ] 6. Elo v2: QB-out adjustment + EPA ratings (train ≤2024, blind 2025)
 - [ ] 7. Hardening: rate limiting, MIN_PICKS=30, email unsubscribe/delete,
