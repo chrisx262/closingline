@@ -23,7 +23,7 @@
        weekly-board RED outline/flag + toast on holiday-leg teams so you don't
        burn them early. 18 new tests in test_all.py
        (ALL PASS). Private design preview (mock data) artifact shared w/ owner.
-       NOT deployed yet — awaiting owner OK (push to main auto-deploys to prod).
+       NOT deployed yet — awaiting owner OK (deploys are MANUAL).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
        pick-popularity feed; optional EndZone model win-prob as a cross-check column.
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
@@ -118,6 +118,11 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   (try/except ALTER) — create_all can't alter existing Postgres tables.
 
 ## Live deployment facts
+
+**DEPLOY IS MANUAL — verified 2026-08-24.** The Railway project has NO GitHub
+deployment trigger (`deploymentTriggers` is an empty list in the API), so
+pushing to GitHub does NOT deploy. Ship with `railway up --detach` from
+~/closingline. Earlier notes in this file claiming push-to-deploy were wrong.
 
 - URL: https://closingline-production.up.railway.app
 - Railway project: closingline (794b7651), service: closingline, region sfo
