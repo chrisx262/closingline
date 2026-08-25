@@ -23,13 +23,42 @@
        weekly-board RED outline/flag + toast on holiday-leg teams so you don't
        burn them early. 18 new tests in test_all.py
        (ALL PASS). Private design preview (mock data) artifact shared w/ owner.
-       NOT deployed yet — awaiting owner OK (push to main auto-deploys to prod).
+       NOT deployed yet — awaiting owner OK (deploys are MANUAL).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
        pick-popularity feed; optional EndZone model win-prob as a cross-check column.
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,
        /leaderboard, /data/games=272, register + admin auth verified)
+- [x] MONEYLINE LEADERBOARD (branch `moneyline-leaderboard`) — endpoint DONE
+       2026-08-23, PAGE DONE 2026-08-24 at /moneyline (moneyline_page.py,
+       broadcast-light + Vegas-dark, RG footer, no-hype guard, linked from the
+       board nav and the survivor nav). Empty-state copy explains the sample
+       gate and how an agent qualifies, since the board stays empty until an
+       agent actually picks moneylines. 32 checks total (ALL PASS). `GET /leaderboard/moneyline?mode=` ranks
+       agents on moneyline picks by **de-vigged win-probability CLV** (CLV
+       first, ROI second per invariant 5). This is the survivor-relevant
+       market and the one EndZone Edge now targets.
+       WHY DE-VIG: the generic `clv_prob` differences two RAW implied probs,
+       which each include the hold. It mostly cancels but not exactly, and on
+       a board whose whole premise is honest measurement that is not good
+       enough. `_ml_fair_probs()` pulls BOTH sides from the same snapshot via
+       snapshot_at()/closing_snapshot() and runs devig_two_way(), so it also
+       inherits the anti-lookahead guarantee instead of creating a second path
+       to prices.
+       CLV SIGN: market moving TOWARD your side after you bet = positive.
+       CONTEXT COLUMNS, never ranking inputs: avg_fair_winprob and
+       underdog_rate. An agent that only picks heavy chalk is not "better"
+       than one taking live dogs — it is playing a different game, and the
+       reader should see that rather than have it hidden in one number.
+       20 new checks (ALL PASS), incl. devig correctness, CLV sign, and that
+       spread picks are excluded from the board.
+       NOTE: seed/backtest agents only place spread+total picks, so the board
+       is EMPTY against seeded data — tests populate it by submitting real
+       moneyline picks through /picks. Real rows need an agent actually
+       picking moneylines (that is task 2, EndZone Edge).
+       NEXT: wire the model win-prob into the survivor page as the
+       cross-check column noted in the SURVIVOR HELPER entry (needs task 2).
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
 - [ ] 3. Friend onboarding verified against the deployed URL
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished
@@ -89,6 +118,11 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   (try/except ALTER) — create_all can't alter existing Postgres tables.
 
 ## Live deployment facts
+
+**DEPLOY IS MANUAL — verified 2026-08-24.** The Railway project has NO GitHub
+deployment trigger (`deploymentTriggers` is an empty list in the API), so
+pushing to GitHub does NOT deploy. Ship with `railway up --detach` from
+~/closingline. Earlier notes in this file claiming push-to-deploy were wrong.
 
 - URL: https://closingline-production.up.railway.app
 - Railway project: closingline (794b7651), service: closingline, region sfo
