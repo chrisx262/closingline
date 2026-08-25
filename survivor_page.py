@@ -6,7 +6,7 @@ probability is exactly the signal, and in our own backtests the market beat our
 model at picking winners — so this tool leans on de-vigged market moneyline win
 probabilities (served by /data/survivor) and layers the survivor strategy on
 top: future value, an (estimated) pick-popularity read, and per-entry used-team
-tracking for a multi-entry portfolio.
+tracking for a multi-entry portfolio (1-10 entries; Circa's per-person cap).
 
 Design matches the main board (broadcast-light + Vegas-dark, CSS-only motion).
 Decision support only — see the responsible-gambling footer; the product voice
@@ -218,6 +218,17 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   margin-top:.2rem}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;opacity:1!important;
   transition:none!important}}
+
+.ecount-ctl{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
+  margin:.2rem 0 .9rem;font-size:.82rem}
+.ecount-ctl label{font-weight:800}
+.ecount-ctl button{width:2rem;height:2rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);font-weight:900;cursor:pointer;font-size:1rem}
+.ecount-ctl button:hover{border-color:var(--up)}
+.ecount-ctl input{width:3.4rem;text-align:center;font-weight:900;font-size:.95rem;
+  padding:.35rem;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink)}
+.ecount-ctl .ehintsm{color:var(--dim);font-size:.72rem}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -252,6 +263,14 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   <h2>Your <em>Entries</em></h2>
   <p class="subnote">Tap an entry to make it active, then use the picks below. Used teams
   are locked out for that entry. Stored in your browser only.</p>
+  <div class="ecount-ctl">
+    <label for="nentries">How many entries do you play?</label>
+    <button type="button" id="eminus" aria-label="one fewer entry">&minus;</button>
+    <input id="nentries" type="number" min="1" max="10" step="1" value="3"
+           inputmode="numeric" aria-label="number of survivor entries">
+    <button type="button" id="eplus" aria-label="one more entry">+</button>
+    <span class="ehintsm">Circa allows up to 10 per person.</span>
+  </div>
   <div class="entries" id="entries"></div>
 </section>
 
@@ -274,9 +293,11 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 </section>
 
 <section>
-  <h2>3-Entry <em>Portfolio</em></h2>
-  <p class="subnote">A diversified split for this week across your active entries —
-  built from the best still-available team for each, so a single upset can't end all three.</p>
+  <h2>Entry <em>Portfolio</em></h2>
+  <p class="subnote">A diversified split for this week across all of your entries —
+  concentrating some on the safest board and spreading the rest, so a single upset
+  can't end them all. With a lot of entries you will be pushed onto weaker teams;
+  the split says so rather than dressing it up.</p>
   <div id="portfolio"></div>
 </section>
 
@@ -343,13 +364,30 @@ function teamsInLeg(leg){var s={};leg.games.forEach(function(g){s[g[0]]=1;s[g[1]
 function holidayLegsFor(team){return HOLIDAY_LEGS.filter(function(l){return teamsInLeg(l).indexOf(team)>=0;});}
 
 /* ---------- entry state ---------- */
-var EK='survivor_entries_v1', AK='survivor_active_v1';
-function entries(){try{return JSON.parse(localStorage.getItem(EK))||{1:[],2:[],3:[]}}catch(e){return{1:[],2:[],3:[]}}}
+var EK='survivor_entries_v1', AK='survivor_active_v1', NK='survivor_count_v1';
+/* Circa caps a person at 10 entries. Mark plays 10; the tool defaults to 3
+   but must scale to the cap without the planner or portfolio assuming three. */
+var MAX_ENTRIES=10;
+function entryCount(){var n=parseInt(localStorage.getItem(NK),10);
+  return (isNaN(n)||n<1)?3:Math.min(n,MAX_ENTRIES);}
+function entryIds(){var a=[],n=entryCount();for(var i=1;i<=n;i++)a.push(String(i));return a;}
+function blankEntries(){var o={};entryIds().forEach(function(n){o[n]=[];});return o;}
+function entries(){
+  var o;try{o=JSON.parse(localStorage.getItem(EK))||{}}catch(e){o={}}
+  entryIds().forEach(function(n){if(!Array.isArray(o[n]))o[n]=[];});
+  return o;}
+function setEntryCount(n){
+  n=Math.max(1,Math.min(MAX_ENTRIES,parseInt(n,10)||1));
+  localStorage.setItem(NK,String(n));
+  /* keep any teams already recorded on entries that still exist; never wipe
+     silently -- a dropped entry's history stays in storage if they add it back */
+  if(parseInt(active(),10)>n)setActive('1');
+  renderAll();}
 function saveEntries(e){localStorage.setItem(EK,JSON.stringify(e))}
 function active(){return localStorage.getItem(AK)||'1'}
 function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner()}
 function usedBy(n){return entries()[n]||[]}
-function usedAny(t){var e=entries();return['1','2','3'].some(function(n){return e[n].indexOf(t)>=0})}
+function usedAny(t){var e=entries();return entryIds().some(function(n){return (e[n]||[]).indexOf(t)>=0})}
 
 function useTeam(team,n){
   var e=entries();if(e[n].indexOf(team)>=0)return;
@@ -367,8 +405,8 @@ function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
 
 function renderEntries(){
   var e=entries(),act=active(),h='';
-  ['1','2','3'].forEach(function(n){
-    var used=e[n];
+  entryIds().forEach(function(n){
+    var used=e[n]||[];
     var chips=used.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
       '">'+t+' <button title="remove" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button></span>';}).join('')
       || '<span class="ehint">No teams used yet</span>';
@@ -386,6 +424,17 @@ var LEAN=(function(){var v=parseFloat(localStorage.getItem(LK));return isNaN(v)?
 function setLean(v){LEAN=parseFloat(v);localStorage.setItem(LK,String(LEAN));
   document.getElementById('leanval').textContent=(LEAN>0?'+':'')+(LEAN*100).toFixed(1)+'%';
   renderBoard();renderPortfolio();renderPlanner();}
+
+/* ---------- entry-count control ---------- */
+(function(){
+  var inp=document.getElementById('nentries');
+  if(!inp)return;
+  inp.value=entryCount();
+  function apply(v){setEntryCount(v);inp.value=entryCount();}
+  inp.onchange=function(){apply(inp.value);};
+  document.getElementById('eplus').onclick=function(){apply(entryCount()+1);};
+  document.getElementById('eminus').onclick=function(){apply(entryCount()-1);};
+})();
 
 /* ---------- data ---------- */
 var DATA=null, WEEKS=[], curIdx=0, PREVIEW=false;
@@ -517,7 +566,7 @@ function renderBoard(){
        '</div>'+
        '<div class="right"><div class="wp '+t[1]+'"><b>'+Math.round(p.wp*100)+'%</b><i class="tier">'+t[0]+'</i></div>'+
        '<div class="usebtns">'+
-       ['1','2','3'].map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
+       entryIds().map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
          return '<button '+(u?'disabled':'')+' onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'Use E'+n)+'</button>';}).join('')+
        '</div></div></div>';
   });
@@ -527,32 +576,68 @@ function renderBoard(){
 function renderPortfolio(){
   var el=document.getElementById('portfolio');
   if(!WEEKS.length){el.innerHTML='<div class="empty">Portfolio suggestion appears once lines post.</div>';return;}
-  var w=WEEKS[curIdx];
-  /* best still-available team per entry (respect each entry's used list) */
-  var teams=weekTeams(w);
-  function bestFor(n,exclude){for(var i=0;i<teams.length;i++){var p=teams[i];
-    if(usedBy(n).indexOf(p.team)>=0)continue;if(exclude.indexOf(p.team)>=0)continue;return p;}return null;}
-  var picks={}, chosen=[];
-  var top=teams.find(function(p){return !usedBy('1').indexOf(p.team)&&true;});
-  // Strategy: if the single best pick is very safe & available to all three, ride 2 + diversify 1.
-  var topAllAvail=teams.length&&['1','2','3'].every(function(n){return usedBy(n).indexOf(teams[0].team)<0;});
-  var why='';
-  if(topAllAvail&&teams[0].wp>=0.84){
-    picks['1']=teams[0];picks['2']=teams[0];
-    picks['3']=bestFor('3',[teams[0].team]);
-    why='Entry 1 & 2 ride '+teams[0].team+' ('+Math.round(teams[0].wp*100)+'%) — safe enough to double up — '+
-        'while Entry 3 diversifies onto '+(picks['3']?picks['3'].team:'—')+' so one upset can\\'t end all three.';
-  }else{
-    ['1','2','3'].forEach(function(n){var ex=Object.keys(picks).map(function(k){return picks[k].team;});
-      picks[n]=bestFor(n,ex);});
-    why='Three different teams — maximum diversification when the top options are close in win%. '+
-        'Each is the strongest team still available to that entry.';
+  var w=WEEKS[curIdx], teams=weekTeams(w), ids=entryIds(), N=ids.length;
+
+  /* Best team still available to entry n, excluding teams already allocated
+     this week when we are deliberately diversifying. */
+  function bestFor(n,exclude){
+    for(var i=0;i<teams.length;i++){var p=teams[i];
+      if(usedBy(n).indexOf(p.team)>=0)continue;
+      if(exclude.indexOf(p.team)>=0)continue;
+      return p;}
+    return null;}
+
+  /* How many entries ride the single safest team.
+     One entry: just take it. Many entries: you cannot find ten good teams in
+     one week, so concentrating some on the safest option and spreading the
+     rest is the honest shape -- but never all of them, or one upset ends
+     everything at once. */
+  var topAvail=teams.length?ids.filter(function(n){return usedBy(n).indexOf(teams[0].team)<0;}):[];
+  var ride=0;
+  if(topAvail.length){
+    var wp=teams[0].wp;
+    var frac=wp>=0.84?0.4:(wp>=0.75?0.3:0.2);
+    ride=Math.max(1,Math.round(N*frac));
+    ride=Math.min(ride,topAvail.length,Math.max(1,N-1)); /* never every entry */
   }
-  var cards=['1','2','3'].map(function(n){var p=picks[n];
+
+  var picks={}, taken=[];
+  topAvail.slice(0,ride).forEach(function(n){picks[n]=teams[0];});
+  if(ride)taken.push(teams[0].team);
+  ids.forEach(function(n){
+    if(picks[n])return;
+    var p=bestFor(n,taken);
+    if(p){picks[n]=p;taken.push(p.team);}
+    else{picks[n]=bestFor(n,[]);}   /* teams exhausted: allow a repeat */
+  });
+
+  var distinct={};ids.forEach(function(n){if(picks[n])distinct[picks[n].team]=1;});
+  var nDistinct=Object.keys(distinct).length;
+  var weakest=null;
+  ids.forEach(function(n){if(picks[n]&&(!weakest||picks[n].wp<weakest.wp))weakest=picks[n];});
+
+  var why;
+  if(N===1){
+    why='One entry, so this is simply the strongest team still available to you.';
+  }else if(ride>1){
+    why=ride+' of your '+N+' entries ride '+teams[0].team+' ('+Math.round(teams[0].wp*100)+
+        '%), the safest board available, while the other '+(N-ride)+
+        ' spread across '+(nDistinct-1)+' different teams so one upset cannot end them all.';
+  }else{
+    why='All '+N+' entries on different teams — maximum diversification when the '+
+        'top options are close in win%.';
+  }
+  if(weakest&&weakest.wp<0.6){
+    why+=' Note: with '+N+' entries you are forced down to '+weakest.team+' at '+
+         Math.round(weakest.wp*100)+'% — that is a real risk of losing an entry, '+
+         'not a recommendation to like it.';
+  }
+
+  var cards=ids.map(function(n){var p=picks[n];
     return '<div class="alloc"><div class="ehead">Entry '+n+'</div>'+
       (p?'<div class="apick"><span class="tchip" style="background:'+tcol(p.team)+'">'+p.team+
         '</span><b>'+p.team+'</b> <span class="awp">'+Math.round(p.wp*100)+'%</span></div>':
-        '<div class="apick" style="color:var(--dim)">No safe team left — plan ahead</div>')+'</div>';}).join('');
+        '<div class="apick" style="color:var(--dim)">No team left — plan ahead</div>')+'</div>';}).join('');
   el.innerHTML='<div class="callout"><h3>Suggested Week '+w.week+' split</h3>'+
     '<div class="allocs">'+cards+'</div><p class="why">'+why+'</p></div>';
 }

@@ -26,6 +26,22 @@
        NOT deployed yet — awaiting owner OK (deploys are MANUAL).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
        pick-popularity feed; optional EndZone model win-prob as a cross-check column.
+- [x] SURVIVOR: VARIABLE ENTRY COUNT (1-10) — DONE 2026-08-24. Mark actually
+       entered **10** Circa Survivor entries ($10k), not 3, and we want to
+       invite him to use the helper — so the 3-entry hardcoding had to go.
+       Entry count is now user-set (default 3, cap 10 = Circa's per-person
+       limit), persisted per browser in `survivor_count_v1`. All the
+       ['1','2','3'] loops became entryIds(); the weekly board, holiday-leg
+       counters and planner all follow.
+       PORTFOLIO REWRITTEN for N entries — "best team for each of 3" does not
+       generalise. You cannot find 10 good teams in one week, so it now
+       concentrates a fraction on the safest board (40% of entries if wp>=.84,
+       30% if >=.75, else 20%) and spreads the rest across distinct teams,
+       and NEVER puts every entry on one team (one upset must not end them
+       all). When a large entry count forces a sub-60% team into the split it
+       says so explicitly — "a real risk of losing an entry, not a
+       recommendation to like it" — rather than presenting a forced pick as a
+       good one. 9 new checks (ALL PASS).
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,

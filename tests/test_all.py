@@ -464,5 +464,22 @@ check("board carries the health banner", 'id="healthbar"' in bt)
 check("board fetches health itself", "fetch('/health')" in bt)
 check("health banner is hidden by default", 'id="healthbar" style="display:none"' in bt)
 
+# --------------------------------------------- survivor: variable entry count
+# Mark plays 10 Circa Survivor entries ($10k), so the helper cannot assume 3.
+# Circa caps a person at 10, which is the ceiling enforced here.
+sv_t = c.get("/survivor").text
+check("survivor: entry-count control present", 'id="nentries"' in sv_t)
+check("survivor: caps entries at Circa's limit of 10", "MAX_ENTRIES=10" in sv_t)
+check("survivor: input max matches the cap", 'max="10"' in sv_t)
+check("survivor: no hardcoded three-entry loops", "['1','2','3']" not in sv_t)
+check("survivor: entry ids are derived, not fixed", "function entryIds()" in sv_t)
+check("survivor: portfolio no longer promises 'all three'",
+      "end all three" not in sv_t)
+check("survivor: portfolio warns when forced onto weak teams",
+      "not a recommendation to like it" in sv_t)
+check("survivor: never stacks every entry on one team",
+      "never every entry" in sv_t)
+check("survivor: entry count persists per browser", "survivor_count_v1" in sv_t)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
