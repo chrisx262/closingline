@@ -98,7 +98,14 @@
        check that only says "unhealthy" just creates worry. Off-season
        snapshot pausing is reported as intentional, not as a fault.
        Board shows a banner ONLY when something is wrong (hidden otherwise).
-       16 new checks (ALL PASS).
+       ADMIN-GATED 2026-08-25: the detailed report names env vars, deploy
+       commands and raw error text — an operator runbook, NOT something to
+       print on a public homepage beside a leaderboard. `/health` is public
+       but vague by default (status + "data may be delayed" + last-updated
+       date); full detail needs ADMIN_KEY via `x-admin-key` header or
+       `?key=`. A wrong key silently gets the public view. Chris checks it
+       with one bookmarked link: closinglinehq.com/health?key=<ADMIN_KEY>
+       (key in ~/closingline/.admin_key_SAVE_THIS.txt). 25 checks (ALL PASS).
        GOTCHA HIT: `Base.metadata.create_all(engine)` runs partway down app.py,
        so a model defined BELOW it never gets its table created — the endpoint
        500'd with "no such table: job_runs". New models MUST go above that

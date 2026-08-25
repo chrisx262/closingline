@@ -624,7 +624,16 @@ def _season_is_active(s: Session) -> bool:
 
 
 @app.get("/health")
-def health(s: Session = Depends(db)):
+def health(s: Session = Depends(db), key: str = Query(default=""),
+           x_admin_key: str = Header(default="")):
+    """Operational health. PUBLIC by default but deliberately vague.
+
+    The full report names env vars, deploy commands and raw error text. That
+    is an operator's runbook, not something to print on a public homepage next
+    to a leaderboard — it tells a stranger what stack you run and what is
+    currently broken. So detail requires the admin key (header or ?key=), and
+    everyone else gets a plain "data may be delayed" with a timestamp.
+    """
     now = datetime.utcnow()
     active = _season_is_active(s)
     issues = []
@@ -690,6 +699,28 @@ def health(s: Session = Depends(db)):
 
     status = ("error" if any(i["level"] == "error" for i in issues)
               else "warn" if issues else "ok")
+
+    supplied = x_admin_key or key
+    is_admin = bool(ADMIN_KEY) and hmac.compare_digest(supplied, ADMIN_KEY)
+    if not ADMIN_KEY:                      # dev/local: no key configured
+        is_admin = True
+
+    last_ok = max([d for d in (weekly.started_at if weekly else None,
+                               snap.started_at if snap else None) if d],
+                  default=None)
+
+    if not is_admin:
+        # Public view: enough to know the board may be stale, nothing more.
+        return {
+            "status": status,
+            "checked_at": now.isoformat() + "Z",
+            "last_updated": last_ok.isoformat() + "Z" if last_ok else None,
+            "summary": ("Everything is up to date." if status == "ok"
+                        else "Data may be delayed — an update has not run "
+                             "as scheduled."),
+            "issue_count": len(issues),
+        }
+
     return {
         "status": status,
         "checked_at": now.isoformat() + "Z",
@@ -1570,8 +1601,17 @@ fetch('/sponsors').then(r=>r.json()).then(sp=>{
    them. Surface any failure here rather than letting it hide until the data
    is visibly months stale. Renders nothing when healthy. */
 fetch('/health').then(function(r){return r.json();}).then(function(h){
-  if(!h.issues||!h.issues.length)return;
+  if(h.status==='ok')return;                       /* healthy: show nothing */
   var el=document.getElementById('healthbar');
+  var esc0=function(t){return String(t).replace(/[&<>]/g,function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});};
+  if(!h.issues){                                   /* public, undetailed view */
+    el.className='warn';
+    el.innerHTML='<h4>Heads up</h4><div class="hi"><div>'+esc0(h.summary)+
+      (h.last_updated?' Last updated '+esc0(h.last_updated.slice(0,10))+'.':'')+
+      '</div></div>';
+    el.style.display='block';return;
+  }
   el.className=h.status==='error'?'err':'warn';
   var esc=function(t){return String(t).replace(/[&<>]/g,function(m){
     return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});};
@@ -1579,7 +1619,7 @@ fetch('/health').then(function(r){return r.json();}).then(function(h){
   h.issues.forEach(function(i){
     html+='<div class="hi"><div class="hw">'+esc(i.what)+'</div>'+
           '<div>'+esc(i.why)+'</div>'+
-          '<div class="hf">Fix: <code>'+esc(i.fix)+'</code></div></div>';
+          (i.fix?'<div class="hf">Fix: <code>'+esc(i.fix)+'</code></div>':'')+'</div>';
   });
   el.innerHTML=html; el.style.display='block';
 }).catch(function(){/* health is diagnostics; never break the board */});

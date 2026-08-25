@@ -489,5 +489,34 @@ check("survivor: only plausible teams get weight",
       "p.wp>=0.60" in sv_t)
 check("survivor: entry count persists per browser", "survivor_count_v1" in sv_t)
 
+# ------------------------------------------------- health: public vs admin
+# The detailed report names env vars, deploy commands and raw error text.
+# That is an operator runbook, not something to print on a public homepage.
+import json as _json
+import app as _app
+_saved_key = _app.ADMIN_KEY
+_app.ADMIN_KEY = "testkey_health_123"
+
+_pub = c.get("/health").json()
+check("health: public view hides the issue list", "issues" not in _pub)
+check("health: public view hides fix commands",
+      "railway" not in _json.dumps(_pub).lower())
+check("health: public view still says whether data is stale",
+      _pub["status"] in ("ok", "warn", "error") and "summary" in _pub)
+check("health: public view reports a last-updated date", "last_updated" in _pub)
+
+_adm = c.get("/health?key=testkey_health_123").json()
+check("health: admin view returns full detail", "issues" in _adm)
+check("health: admin key works via header",
+      "issues" in c.get("/health", headers={"x-admin-key": "testkey_health_123"}).json())
+check("health: wrong key gets the public view only",
+      "issues" not in c.get("/health?key=nope").json())
+check("health: admin detail still carries fixes",
+      all(i.get("fix") for i in _adm["issues"]) if _adm["issues"] else True)
+_app.ADMIN_KEY = _saved_key
+
+check("board banner tolerates the undetailed public payload",
+      "public, undetailed view" in c.get("/").text)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
