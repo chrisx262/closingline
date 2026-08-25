@@ -577,55 +577,83 @@ function renderPortfolio(){
   var el=document.getElementById('portfolio');
   if(!WEEKS.length){el.innerHTML='<div class="empty">Portfolio suggestion appears once lines post.</div>';return;}
   var w=WEEKS[curIdx], teams=weekTeams(w), ids=entryIds(), N=ids.length;
+  if(!teams.length){el.innerHTML='<div class="empty">No games to allocate this week.</div>';return;}
 
-  /* Best team still available to entry n, excluding teams already allocated
-     this week when we are deliberately diversifying. */
-  function bestFor(n,exclude){
-    for(var i=0;i<teams.length;i++){var p=teams[i];
-      if(usedBy(n).indexOf(p.team)>=0)continue;
-      if(exclude.indexOf(p.team)>=0)continue;
-      return p;}
-    return null;}
+  /* ---- how many entries go on each team ------------------------------
+     Real multi-entry play STACKS: several entries on the safest board, a
+     few on the next, tapering down -- not one big block and then a long
+     tail of singletons. Weight each candidate by how far its win% sits
+     above a coin flip, then hand out entries by largest remainder.
+     Two hard rules:
+       - no team may take more than half the entries, so one upset can
+         never wipe the portfolio;
+       - only teams that are actually plausible get weight.            */
+  var pool=teams.filter(function(p){return p.wp>=0.60;});
+  if(pool.length<2)pool=teams.slice(0,Math.max(2,Math.min(3,teams.length)));
+  pool=pool.slice(0,Math.max(1,Math.min(pool.length,N)));
 
-  /* How many entries ride the single safest team.
-     One entry: just take it. Many entries: you cannot find ten good teams in
-     one week, so concentrating some on the safest option and spreading the
-     rest is the honest shape -- but never all of them, or one upset ends
-     everything at once. */
-  var topAvail=teams.length?ids.filter(function(n){return usedBy(n).indexOf(teams[0].team)<0;}):[];
-  var ride=0;
-  if(topAvail.length){
-    var wp=teams[0].wp;
-    var frac=wp>=0.84?0.4:(wp>=0.75?0.3:0.2);
-    ride=Math.max(1,Math.round(N*frac));
-    ride=Math.min(ride,topAvail.length,Math.max(1,N-1)); /* never every entry */
+  var cap=Math.max(1,Math.floor(N/2));
+  var wts=pool.map(function(p){return Math.max(0.01,p.wp-0.5);});
+  var tot=wts.reduce(function(a,b){return a+b;},0);
+  var raw=wts.map(function(x){return x/tot*N;});
+  var counts=raw.map(function(x){return Math.min(cap,Math.floor(x));});
+  var left=N-counts.reduce(function(a,b){return a+b;},0);
+  /* largest-remainder pass, respecting the cap */
+  var order=raw.map(function(x,i){return [x-Math.floor(x),i];})
+               .sort(function(a,b){return b[0]-a[0];});
+  var gi=0;
+  while(left>0){
+    var i=order[gi%order.length][1];
+    if(counts[i]<cap){counts[i]++;left--;}
+    else if(order.every(function(o){return counts[o[1]]>=cap;})){
+      /* every candidate is capped -- widen the pool rather than break a rule */
+      var extra=teams.filter(function(p){return pool.indexOf(p)<0;})[0];
+      if(!extra)break;
+      pool.push(extra);counts.push(0);order.push([0,counts.length-1]);
+    }
+    gi++;
+    if(gi>500)break;
   }
 
-  var picks={}, taken=[];
-  topAvail.slice(0,ride).forEach(function(n){picks[n]=teams[0];});
-  if(ride)taken.push(teams[0].team);
-  ids.forEach(function(n){
-    if(picks[n])return;
-    var p=bestFor(n,taken);
-    if(p){picks[n]=p;taken.push(p.team);}
-    else{picks[n]=bestFor(n,[]);}   /* teams exhausted: allow a repeat */
+  /* ---- assign those blocks to actual entries -------------------------
+     An entry cannot reuse a team it has already burned, so this is a
+     matching problem, not a straight slice.                            */
+  var picks={}, unassigned=ids.slice();
+  pool.forEach(function(p,i){
+    var need=counts[i];
+    for(var k=0;k<unassigned.length&&need>0;k++){
+      var n=unassigned[k];
+      if(usedBy(n).indexOf(p.team)>=0)continue;
+      picks[n]=p;unassigned.splice(k,1);k--;need--;
+    }
+  });
+  unassigned.forEach(function(n){          /* fallback for burned-out entries */
+    for(var i=0;i<teams.length;i++){
+      if(usedBy(n).indexOf(teams[i].team)<0){picks[n]=teams[i];return;}
+    }
+    picks[n]=null;
   });
 
-  var distinct={};ids.forEach(function(n){if(picks[n])distinct[picks[n].team]=1;});
-  var nDistinct=Object.keys(distinct).length;
+  /* ---- explain the shape --------------------------------------------- */
+  var byTeam={};
+  ids.forEach(function(n){if(picks[n]){byTeam[picks[n].team]=(byTeam[picks[n].team]||0)+1;}});
+  var blocks=Object.keys(byTeam).map(function(t){
+      var p=teams.filter(function(x){return x.team===t;})[0];
+      return {team:t,n:byTeam[t],wp:p?p.wp:null};})
+    .sort(function(a,b){return b.n-a.n;});
   var weakest=null;
   ids.forEach(function(n){if(picks[n]&&(!weakest||picks[n].wp<weakest.wp))weakest=picks[n];});
 
   var why;
   if(N===1){
     why='One entry, so this is simply the strongest team still available to you.';
-  }else if(ride>1){
-    why=ride+' of your '+N+' entries ride '+teams[0].team+' ('+Math.round(teams[0].wp*100)+
-        '%), the safest board available, while the other '+(N-ride)+
-        ' spread across '+(nDistinct-1)+' different teams so one upset cannot end them all.';
   }else{
-    why='All '+N+' entries on different teams — maximum diversification when the '+
-        'top options are close in win%.';
+    why=blocks.map(function(b){
+      return b.n+(b.n===1?' entry on ':' entries on ')+b.team+
+             (b.wp!=null?' ('+Math.round(b.wp*100)+'%)':'');}).join(', ')+'. ';
+    why+='Entries are stacked on the safer boards and tapered down, which is how '+
+         'multi-entry play actually works — but no team takes more than half your '+
+         'entries, so a single upset cannot wipe the portfolio.';
   }
   if(weakest&&weakest.wp<0.6){
     why+=' Note: with '+N+' entries you are forced down to '+weakest.team+' at '+

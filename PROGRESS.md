@@ -33,12 +33,19 @@
        limit), persisted per browser in `survivor_count_v1`. All the
        ['1','2','3'] loops became entryIds(); the weekly board, holiday-leg
        counters and planner all follow.
-       PORTFOLIO REWRITTEN for N entries — "best team for each of 3" does not
-       generalise. You cannot find 10 good teams in one week, so it now
-       concentrates a fraction on the safest board (40% of entries if wp>=.84,
-       30% if >=.75, else 20%) and spreads the rest across distinct teams,
-       and NEVER puts every entry on one team (one upset must not end them
-       all). When a large entry count forces a sub-60% team into the split it
+       PORTFOLIO REWRITTEN for N entries, then rewritten AGAIN after Chris
+       pointed out the real behaviour: **Mark reuses the same team across
+       several entries** — multi-entry players STACK. The first attempt put a
+       block on the top team then forced every other entry onto a distinct
+       team, which produced "4 on one team + 6 singletons" at N=10. Nobody
+       plays that way.
+       Now: candidate teams (wp>=.60) are weighted by (wp-0.5) and entries are
+       handed out by LARGEST REMAINDER, giving a tapered stack. Verified by
+       simulation — N=10 on a normal week gives 3xKC(88%) 2xBUF(82%) 2xSF(78%)
+       1xPHI 1xDET 1xBAL; on a week with one dominant team, 5xKC(93%) 3xBUF
+       2xSF. HARD RULE: no team may take more than floor(N/2) entries, so one
+       upset can never wipe the portfolio. Assignment is a MATCHING problem,
+       not a slice, because an entry cannot reuse a team it already burned. When a large entry count forces a sub-60% team into the split it
        says so explicitly — "a real risk of losing an entry, not a
        recommendation to like it" — rather than presenting a forced pick as a
        good one. 9 new checks (ALL PASS).

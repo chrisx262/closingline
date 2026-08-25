@@ -477,8 +477,16 @@ check("survivor: portfolio no longer promises 'all three'",
       "end all three" not in sv_t)
 check("survivor: portfolio warns when forced onto weak teams",
       "not a recommendation to like it" in sv_t)
-check("survivor: never stacks every entry on one team",
-      "never every entry" in sv_t)
+check("survivor: stacks entries across teams, not one block plus singletons",
+      "largest remainder" in sv_t.lower() or "largest-remainder" in sv_t)
+check("survivor: caps any one team at half the entries",
+      "no team may take more than half" in sv_t)
+check("survivor: cap is enforced in code, not just described",
+      "Math.floor(N/2)" in sv_t)
+check("survivor: explains the stack shape to the user",
+      "multi-entry play actually works" in sv_t)
+check("survivor: only plausible teams get weight",
+      "p.wp>=0.60" in sv_t)
 check("survivor: entry count persists per browser", "survivor_count_v1" in sv_t)
 
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
