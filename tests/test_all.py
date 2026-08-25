@@ -405,5 +405,64 @@ check("moneyline page surfaces dog rate as context", "Dog rate" in mp.text)
 check("board links to the moneyline page", '/moneyline' in c.get("/").text)
 check("survivor links to the moneyline page", '/moneyline' in c.get("/survivor").text)
 
+# ------------------------------------------------------- scheduler health
+# The scheduler lives inside the web process, so a restart can kill it with no
+# trace. These checks guard the thing that makes failure VISIBLE, and that
+# every reported problem carries an actionable fix rather than just a red flag.
+from app import JobRun, SessionLocal as _SL
+from datetime import datetime as _dt, timedelta as _td
+
+h = c.get("/health")
+check("health endpoint 200", h.status_code == 200)
+hd = h.json()
+check("health reports a status", hd["status"] in ("ok", "warn", "error"))
+check("health reports season activity", isinstance(hd["season_active"], bool))
+check("health issues are actionable (every issue has a fix)",
+      all(i.get("fix") and i.get("why") and i.get("what") for i in hd["issues"]))
+check("health issue levels are valid",
+      all(i["level"] in ("warn", "error") for i in hd["issues"]))
+
+# a fresh db has no recorded runs -> must NOT claim everything is fine
+check("health does not report ok when nothing has ever run",
+      hd["status"] != "ok" or hd["last_weekly_update"] is not None)
+
+_s = _SL()
+_s.query(JobRun).delete()
+_s.add(JobRun(job="weekly_update", started_at=_dt.utcnow(),
+              finished_at=_dt.utcnow(), ok=True, detail="test"))
+_s.commit()
+hd2 = c.get("/health").json()
+check("health sees a recorded weekly update", hd2["last_weekly_update"] is not None)
+check("fresh weekly update clears the stale-weekly issue",
+      not any("Weekly update last succeeded" in i["what"] for i in hd2["issues"]))
+
+# an old run must be flagged as stale
+_s.query(JobRun).delete()
+_s.add(JobRun(job="weekly_update", started_at=_dt.utcnow() - _td(days=30),
+              finished_at=_dt.utcnow() - _td(days=30), ok=True, detail="old"))
+_s.commit()
+hd3 = c.get("/health").json()
+check("stale weekly update is flagged",
+      any("Weekly update last succeeded" in i["what"] for i in hd3["issues"]))
+check("stale weekly update fix names the command",
+      any("weekly_update.py" in i["fix"] for i in hd3["issues"]))
+
+# a recent failure must surface with its recorded error
+_s.add(JobRun(job="snapshot", started_at=_dt.utcnow() - _td(hours=2),
+              finished_at=_dt.utcnow() - _td(hours=2), ok=False,
+              detail="RuntimeError: odds api 401"))
+_s.commit()
+hd4 = c.get("/health").json()
+check("recent job failure is surfaced",
+      any("failed in the last 3 days" in i["what"] for i in hd4["issues"]))
+check("failure detail is carried into the report",
+      any("odds api 401" in i["why"] for i in hd4["issues"]))
+_s.query(JobRun).delete(); _s.commit(); _s.close()
+
+bt = c.get("/").text
+check("board carries the health banner", 'id="healthbar"' in bt)
+check("board fetches health itself", "fetch('/health')" in bt)
+check("health banner is hidden by default", 'id="healthbar" style="display:none"' in bt)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

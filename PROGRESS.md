@@ -59,6 +59,27 @@
        picking moneylines (that is task 2, EndZone Edge).
        NEXT: wire the model win-prob into the survivor page as the
        cross-check column noted in the SURVIVOR HELPER entry (needs task 2).
+- [x] SCHEDULER HEALTH CHECK — DONE 2026-08-24 (branch `scheduler-health`).
+       WHY: the scheduler runs INSIDE the web process, so a redeploy, crash or
+       platform restart (e.g. the Sat/Sun Postgres patch window) takes the
+       thread with it and a missed Tuesday left NO trace. Verified live that
+       RUN_SCHEDULER=1 and the thread starts, but there was no way to know if
+       it later died — it would have surfaced as stale data in October.
+       WHAT: new `JobRun` table records EVERY scheduled attempt (job,
+       started_at, ok, detail) incl. a startup heartbeat; scheduler._record()
+       writes it and deliberately swallows its own errors so health
+       bookkeeping can never be the reason a real job fails. `GET /health`
+       grades staleness (weekly_update > 8 days, snapshots > 84h while a game
+       is within 8 days) and surfaces recent failures WITH the recorded error.
+       Every issue carries what / why / FIX (an exact command) — a health
+       check that only says "unhealthy" just creates worry. Off-season
+       snapshot pausing is reported as intentional, not as a fault.
+       Board shows a banner ONLY when something is wrong (hidden otherwise).
+       16 new checks (ALL PASS).
+       GOTCHA HIT: `Base.metadata.create_all(engine)` runs partway down app.py,
+       so a model defined BELOW it never gets its table created — the endpoint
+       500'd with "no such table: job_runs". New models MUST go above that
+       line. Would have failed identically on prod Postgres.
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
 - [ ] 3. Friend onboarding verified against the deployed URL
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished
