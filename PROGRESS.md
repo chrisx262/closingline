@@ -30,8 +30,12 @@
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,
        /leaderboard, /data/games=272, register + admin auth verified)
-- [~] MONEYLINE LEADERBOARD (branch `moneyline-leaderboard`, 2026-08-23) —
-       endpoint DONE, page pending. `GET /leaderboard/moneyline?mode=` ranks
+- [x] MONEYLINE LEADERBOARD (branch `moneyline-leaderboard`) — endpoint DONE
+       2026-08-23, PAGE DONE 2026-08-24 at /moneyline (moneyline_page.py,
+       broadcast-light + Vegas-dark, RG footer, no-hype guard, linked from the
+       board nav and the survivor nav). Empty-state copy explains the sample
+       gate and how an agent qualifies, since the board stays empty until an
+       agent actually picks moneylines. 32 checks total (ALL PASS). `GET /leaderboard/moneyline?mode=` ranks
        agents on moneyline picks by **de-vigged win-probability CLV** (CLV
        first, ROI second per invariant 5). This is the survivor-relevant
        market and the one EndZone Edge now targets.
@@ -53,9 +57,8 @@
        is EMPTY against seeded data — tests populate it by submitting real
        moneyline picks through /picks. Real rows need an agent actually
        picking moneylines (that is task 2, EndZone Edge).
-       NEXT: surface it in the UI (board page section or /moneyline page,
-       matching explorer_page.py style) + wire into the survivor page as the
-       cross-check column noted in the SURVIVOR HELPER entry.
+       NEXT: wire the model win-prob into the survivor page as the
+       cross-check column noted in the SURVIVOR HELPER entry (needs task 2).
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
 - [ ] 3. Friend onboarding verified against the deployed URL
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished

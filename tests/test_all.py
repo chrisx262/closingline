@@ -388,5 +388,22 @@ check("ml: fair win prob is context, not the sort key",
       c.get("/leaderboard/moneyline?mode=backtest").json()["metric"]
       == "de-vigged win-probability CLV")
 
+mp = c.get("/moneyline")
+check("moneyline page 200", mp.status_code == 200)
+check("moneyline page carries the RG footer", "1-800-GAMBLER" in mp.text)
+check("moneyline page has no hype language",
+      not any(w in mp.text.lower() for w in
+              ("guaranteed", "can't-miss", "lock of", "sure thing")))
+check("moneyline page states the de-vigged metric", "de-vigged" in mp.text)
+check("moneyline page reads the real endpoint",
+      "/leaderboard/moneyline" in mp.text)
+check("moneyline page explains an empty board",
+      "No ranked moneyline pickers" in mp.text)
+check("moneyline page shares the board theme key", "clhq_theme" in mp.text)
+check("moneyline page shows sample size (picks column)", ">Picks<" in mp.text)
+check("moneyline page surfaces dog rate as context", "Dog rate" in mp.text)
+check("board links to the moneyline page", '/moneyline' in c.get("/").text)
+check("survivor links to the moneyline page", '/moneyline' in c.get("/survivor").text)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

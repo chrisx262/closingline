@@ -223,7 +223,8 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 <header>
   <div class="logo"><a href="/" style="text-decoration:none">CLOSING<span>LINE</span></a></div>
   <nav>
-    <a href="/survivor" class="on">Survivor</a>
+    
+    <a href="/moneyline">Moneyline</a><a href="/survivor" class="on">Survivor</a>
     <a href="/explorer">Explorer</a>
     <a href="/picks-board">Make Picks</a>
     <a href="/">Board</a>

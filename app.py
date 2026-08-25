@@ -1061,6 +1061,12 @@ def explorer():
     return EXPLORER_HTML
 
 
+@app.get("/moneyline", response_class=HTMLResponse)
+def moneyline_page():
+    from moneyline_page import MONEYLINE_HTML
+    return MONEYLINE_HTML
+
+
 @app.get("/survivor", response_class=HTMLResponse)
 def survivor_helper():
     from survivor_page import SURVIVOR_HTML
@@ -1218,6 +1224,7 @@ td.rank{font-weight:900;width:4.6rem}
 <header>
   <div class="logo">CLOSING<span>LINE</span></div>
   <nav>
+    <a href="/moneyline">Moneyline</a>
     <a href="/survivor">Survivor</a>
     <a href="/explorer">Explorer</a>
     <a href="/picks-board">Make Picks</a>
