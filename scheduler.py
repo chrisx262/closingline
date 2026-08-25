@@ -65,6 +65,24 @@ def _season_active() -> bool:
         s.close()
 
 
+def _record(job, started, ok, detail):
+    """Persist the outcome of a job attempt so /health can see it.
+
+    Deliberately swallows its own errors: health bookkeeping must never be
+    the reason a real job fails.
+    """
+    try:
+        from datetime import datetime as _dt
+        from app import SessionLocal, JobRun
+        s = SessionLocal()
+        s.add(JobRun(job=job, started_at=started, finished_at=_dt.utcnow(),
+                     ok=ok, detail=(detail or "")[:500]))
+        s.commit()
+        s.close()
+    except Exception as e:
+        print(f"scheduler: could not record job run ({e})")
+
+
 def _run(job: str):
     if job == "snapshot":
         if not _season_active():
@@ -90,10 +108,13 @@ def _loop():
         for key, job in due_slots(now_et, fired):
             fired.add(key)
             print(f"scheduler: firing {key} ({job})")
+            started = datetime.utcnow()
             try:
                 _run(job)
-            except Exception as e:  # log and keep the loop alive
+                _record(job, started, True, f"{key} ok")
+            except Exception as e:  # log, record and keep the loop alive
                 print(f"scheduler: {key} failed: {e}")
+                _record(job, started, False, f"{type(e).__name__}: {e}")
         # keep only today's keys so the set can't grow unbounded
         today = str(now_et.date())
         fired = {k for k in fired if k.endswith(today)}
@@ -103,6 +124,7 @@ def _loop():
 def start():
     if os.environ.get("RUN_SCHEDULER") != "1":
         return False
+    _record("startup", datetime.utcnow(), True, "scheduler thread started")
     threading.Thread(target=_loop, daemon=True, name="closingline-cron").start()
     print("scheduler: started (RUN_SCHEDULER=1)")
     return True

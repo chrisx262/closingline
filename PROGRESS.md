@@ -26,6 +26,29 @@
        NOT deployed yet — awaiting owner OK (deploys are MANUAL).
        NEXT: moneyline leaderboard (rank picks/agents by ML win prob); real
        pick-popularity feed; optional EndZone model win-prob as a cross-check column.
+- [x] SURVIVOR: VARIABLE ENTRY COUNT (1-10) — DONE 2026-08-24. Mark actually
+       entered **10** Circa Survivor entries ($10k), not 3, and we want to
+       invite him to use the helper — so the 3-entry hardcoding had to go.
+       Entry count is now user-set (default 3, cap 10 = Circa's per-person
+       limit), persisted per browser in `survivor_count_v1`. All the
+       ['1','2','3'] loops became entryIds(); the weekly board, holiday-leg
+       counters and planner all follow.
+       PORTFOLIO REWRITTEN for N entries, then rewritten AGAIN after Chris
+       pointed out the real behaviour: **Mark reuses the same team across
+       several entries** — multi-entry players STACK. The first attempt put a
+       block on the top team then forced every other entry onto a distinct
+       team, which produced "4 on one team + 6 singletons" at N=10. Nobody
+       plays that way.
+       Now: candidate teams (wp>=.60) are weighted by (wp-0.5) and entries are
+       handed out by LARGEST REMAINDER, giving a tapered stack. Verified by
+       simulation — N=10 on a normal week gives 3xKC(88%) 2xBUF(82%) 2xSF(78%)
+       1xPHI 1xDET 1xBAL; on a week with one dominant team, 5xKC(93%) 3xBUF
+       2xSF. HARD RULE: no team may take more than floor(N/2) entries, so one
+       upset can never wipe the portfolio. Assignment is a MATCHING problem,
+       not a slice, because an entry cannot reuse a team it already burned. When a large entry count forces a sub-60% team into the split it
+       says so explicitly — "a real risk of losing an entry, not a
+       recommendation to like it" — rather than presenting a forced pick as a
+       good one. 9 new checks (ALL PASS).
 - [x] 1. Deploy to Railway/Fly — DONE 2026-07-12: live at
        https://closingline-production.up.railway.app (Railway, Postgres,
        ADMIN_KEY/MIN_PICKS/ODDS_API_KEY env vars, smoke-tested: /, /docs,
@@ -59,6 +82,34 @@
        picking moneylines (that is task 2, EndZone Edge).
        NEXT: wire the model win-prob into the survivor page as the
        cross-check column noted in the SURVIVOR HELPER entry (needs task 2).
+- [x] SCHEDULER HEALTH CHECK — DONE 2026-08-24 (branch `scheduler-health`).
+       WHY: the scheduler runs INSIDE the web process, so a redeploy, crash or
+       platform restart (e.g. the Sat/Sun Postgres patch window) takes the
+       thread with it and a missed Tuesday left NO trace. Verified live that
+       RUN_SCHEDULER=1 and the thread starts, but there was no way to know if
+       it later died — it would have surfaced as stale data in October.
+       WHAT: new `JobRun` table records EVERY scheduled attempt (job,
+       started_at, ok, detail) incl. a startup heartbeat; scheduler._record()
+       writes it and deliberately swallows its own errors so health
+       bookkeeping can never be the reason a real job fails. `GET /health`
+       grades staleness (weekly_update > 8 days, snapshots > 84h while a game
+       is within 8 days) and surfaces recent failures WITH the recorded error.
+       Every issue carries what / why / FIX (an exact command) — a health
+       check that only says "unhealthy" just creates worry. Off-season
+       snapshot pausing is reported as intentional, not as a fault.
+       Board shows a banner ONLY when something is wrong (hidden otherwise).
+       ADMIN-GATED 2026-08-25: the detailed report names env vars, deploy
+       commands and raw error text — an operator runbook, NOT something to
+       print on a public homepage beside a leaderboard. `/health` is public
+       but vague by default (status + "data may be delayed" + last-updated
+       date); full detail needs ADMIN_KEY via `x-admin-key` header or
+       `?key=`. A wrong key silently gets the public view. Chris checks it
+       with one bookmarked link: closinglinehq.com/health?key=<ADMIN_KEY>
+       (key in ~/closingline/.admin_key_SAVE_THIS.txt). 25 checks (ALL PASS).
+       GOTCHA HIT: `Base.metadata.create_all(engine)` runs partway down app.py,
+       so a model defined BELOW it never gets its table created — the endpoint
+       500'd with "no such table: job_runs". New models MUST go above that
+       line. Would have failed identically on prod Postgres.
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
 - [ ] 3. Friend onboarding verified against the deployed URL
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished

@@ -18,7 +18,7 @@ import hmac
 import math
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
@@ -146,6 +146,23 @@ class RankSnapshot(Base):
     agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
     rank = Column(Integer, nullable=False)
     captured_at = Column(DateTime, nullable=False)
+
+
+class JobRun(Base):
+    """One row per scheduled-job attempt, success or failure.
+
+    The scheduler runs INSIDE the web process, so a redeploy, crash or
+    platform restart takes the thread with it. Previously a missed Tuesday
+    would have been invisible until someone noticed stale data in October.
+    Recording attempts turns a silent failure into a visible one.
+    """
+    __tablename__ = "job_runs"
+    id = Column(Integer, primary_key=True)
+    job = Column(String, nullable=False)           # snapshot | weekly_update
+    started_at = Column(DateTime, nullable=False)  # UTC
+    finished_at = Column(DateTime)
+    ok = Column(Boolean, default=False)
+    detail = Column(String)                        # error text, or a summary
 
 
 Base.metadata.create_all(engine)
@@ -579,6 +596,142 @@ def _smack_lines(board, mode):
                  "🤖 Agents pick. Humans bet. The closing line keeps everyone honest",
                  "📡 Odds snapshots are rolling — line movement becomes CLV when the season kicks off"]
     return lines
+
+
+# ---------------------------------------------------------------- health
+# The scheduler runs inside the web process, so any restart takes it with it
+# and a missed run leaves no trace. These checks exist so that failure is
+# visible on the board instead of being discovered months later in stale data.
+# Every problem reports WHAT is wrong, WHY it matters, and the exact command
+# that fixes it — a health check that only says "unhealthy" just creates worry.
+SNAPSHOT_STALE_HOURS = 84      # cadence is Tue/Thu/Sat/Sun, so ~3.5 days max
+WEEKLY_STALE_DAYS = 8          # weekly_update is Tuesdays; 8 days = one missed
+
+
+def _last_run(s: Session, job: str, ok_only: bool = True):
+    q = s.query(JobRun).filter(JobRun.job == job)
+    if ok_only:
+        q = q.filter(JobRun.ok == True)             # noqa: E712
+    return q.order_by(JobRun.started_at.desc()).first()
+
+
+def _season_is_active(s: Session) -> bool:
+    """Snapshots are meant to pause out of season — that is thrift, not fault."""
+    now = datetime.utcnow()
+    return bool(s.query(Game).filter(
+        Game.kickoff >= now - timedelta(hours=12),
+        Game.kickoff <= now + timedelta(days=8)).count())
+
+
+@app.get("/health")
+def health(s: Session = Depends(db), key: str = Query(default=""),
+           x_admin_key: str = Header(default="")):
+    """Operational health. PUBLIC by default but deliberately vague.
+
+    The full report names env vars, deploy commands and raw error text. That
+    is an operator's runbook, not something to print on a public homepage next
+    to a leaderboard — it tells a stranger what stack you run and what is
+    currently broken. So detail requires the admin key (header or ?key=), and
+    everyone else gets a plain "data may be delayed" with a timestamp.
+    """
+    now = datetime.utcnow()
+    active = _season_is_active(s)
+    issues = []
+
+    scheduler_on = os.environ.get("RUN_SCHEDULER") == "1"
+    if not scheduler_on:
+        issues.append({
+            "level": "error", "what": "The scheduler is switched off.",
+            "why": "Nothing refreshes the schedule, grades picks or captures "
+                   "odds. Data will silently go stale.",
+            "fix": "Set RUN_SCHEDULER=1 on the service, then redeploy: "
+                   "railway variables --set RUN_SCHEDULER=1 && railway up"})
+
+    weekly = _last_run(s, "weekly_update")
+    if weekly is None:
+        issues.append({
+            "level": "warn", "what": "No weekly update has ever completed.",
+            "why": "New games appear only when weekly_update re-pulls the "
+                   "schedule, so missing weeks will never fill in.",
+            "fix": "Run it once by hand: python weekly_update.py"})
+    else:
+        age = (now - weekly.started_at).days
+        if age > WEEKLY_STALE_DAYS:
+            issues.append({
+                "level": "error",
+                "what": f"Weekly update last succeeded {age} days ago.",
+                "why": "It should run every Tuesday 09:00 ET. The scheduler "
+                       "thread probably died with a restart.",
+                "fix": "Redeploy to restart the thread (railway up), then run "
+                       "python weekly_update.py to catch up immediately."})
+
+    snap = _last_run(s, "snapshot")
+    if active:
+        if snap is None:
+            issues.append({
+                "level": "error", "what": "No odds snapshot has ever completed.",
+                "why": "CLV is measured between snapshots. Without them, picks "
+                       "cannot be priced or graded honestly.",
+                "fix": "Check ODDS_API_KEY is set and has credits at "
+                       "the-odds-api.com, then: python -c "
+                       "'from loaders.real_data import snapshot_odds; snapshot_odds()'"})
+        else:
+            hrs = (now - snap.started_at).total_seconds() / 3600
+            if hrs > SNAPSHOT_STALE_HOURS:
+                issues.append({
+                    "level": "error",
+                    "what": f"Last odds snapshot was {hrs/24:.1f} days ago.",
+                    "why": "Games are kicking off within 8 days, so snapshots "
+                           "should be running Tue/Thu/Sat/Sun.",
+                    "fix": "Most often an exhausted or invalid ODDS_API_KEY — "
+                           "check credits at the-odds-api.com. Then redeploy."})
+
+    failed = (s.query(JobRun).filter(JobRun.ok == False)      # noqa: E712
+              .filter(JobRun.started_at >= now - timedelta(days=3))
+              .order_by(JobRun.started_at.desc()).first())
+    if failed:
+        issues.append({
+            "level": "warn",
+            "what": f"A '{failed.job}' run failed in the last 3 days.",
+            "why": f"Recorded error: {failed.detail}",
+            "fix": "Check the deploy logs (railway logs) around "
+                   f"{failed.started_at:%Y-%m-%d %H:%M} UTC for the traceback."})
+
+    status = ("error" if any(i["level"] == "error" for i in issues)
+              else "warn" if issues else "ok")
+
+    supplied = x_admin_key or key
+    is_admin = bool(ADMIN_KEY) and hmac.compare_digest(supplied, ADMIN_KEY)
+    if not ADMIN_KEY:                      # dev/local: no key configured
+        is_admin = True
+
+    last_ok = max([d for d in (weekly.started_at if weekly else None,
+                               snap.started_at if snap else None) if d],
+                  default=None)
+
+    if not is_admin:
+        # Public view: enough to know the board may be stale, nothing more.
+        return {
+            "status": status,
+            "checked_at": now.isoformat() + "Z",
+            "last_updated": last_ok.isoformat() + "Z" if last_ok else None,
+            "summary": ("Everything is up to date." if status == "ok"
+                        else "Data may be delayed — an update has not run "
+                             "as scheduled."),
+            "issue_count": len(issues),
+        }
+
+    return {
+        "status": status,
+        "checked_at": now.isoformat() + "Z",
+        "season_active": active,
+        "snapshots_paused_off_season": not active,
+        "last_weekly_update": weekly.started_at.isoformat() + "Z" if weekly else None,
+        "last_odds_snapshot": snap.started_at.isoformat() + "Z" if snap else None,
+        "issues": issues,
+        "summary": ("All scheduled jobs are running." if status == "ok"
+                    else f"{len(issues)} issue(s) need attention."),
+    }
 
 
 @app.get("/leaderboard")
@@ -1219,6 +1372,21 @@ td.rank{font-weight:900;width:4.6rem}
 @media (prefers-reduced-motion: reduce){
   *,.ticker-inner,.card,tbody tr{animation:none !important;opacity:1 !important;
     transition:none !important}}
+
+/* health banner — only rendered when a check fails */
+#healthbar{margin:1rem 0 0;border-radius:10px;padding:.85rem 1rem;
+  border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);
+  font-size:.84rem;line-height:1.55}
+#healthbar.err{border-color:var(--down)}
+#healthbar.warn{border-color:var(--gold)}
+#healthbar h4{margin:0 0 .4rem;font-size:.78rem;text-transform:uppercase;
+  letter-spacing:.05em}
+#healthbar.err h4{color:var(--down)} #healthbar.warn h4{color:var(--gold)}
+#healthbar .hi{margin:.5rem 0;padding-left:.7rem;border-left:3px solid var(--line)}
+#healthbar .hw{font-weight:800}
+#healthbar .hf{color:var(--dim)}
+#healthbar code{background:var(--panel2);padding:.08rem .3rem;border-radius:4px;
+  font-size:.78rem;word-break:break-all}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -1232,6 +1400,10 @@ td.rank{font-weight:900;width:4.6rem}
     <button id="themeBtn" title="Toggle light/dark">🌙</button>
   </nav>
 </header>
+
+<!-- Health banner: hidden when everything is fine, so it only ever appears
+     when something actually needs attention. States the problem AND the fix. -->
+<div id="healthbar" style="display:none"></div>
 
 <div class="ticker" id="ticker" aria-label="League news ticker"><span class="ticker-inner" id="tickerInner"></span></div>
 <div id="sponsorLine"></div>
@@ -1424,4 +1596,32 @@ fetch('/sponsors').then(r=>r.json()).then(sp=>{
   '<a href="/go-sponsor/leaderboard" target="_blank">'+sp.leaderboard.tagline+
   '</a> · sponsored — never affects rankings</p>'}
 }).catch(()=>{});
-</script></body></html>"""
+</script><script>
+/* Scheduled jobs run inside this web process, so a restart can silently kill
+   them. Surface any failure here rather than letting it hide until the data
+   is visibly months stale. Renders nothing when healthy. */
+fetch('/health').then(function(r){return r.json();}).then(function(h){
+  if(h.status==='ok')return;                       /* healthy: show nothing */
+  var el=document.getElementById('healthbar');
+  var esc0=function(t){return String(t).replace(/[&<>]/g,function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});};
+  if(!h.issues){                                   /* public, undetailed view */
+    el.className='warn';
+    el.innerHTML='<h4>Heads up</h4><div class="hi"><div>'+esc0(h.summary)+
+      (h.last_updated?' Last updated '+esc0(h.last_updated.slice(0,10))+'.':'')+
+      '</div></div>';
+    el.style.display='block';return;
+  }
+  el.className=h.status==='error'?'err':'warn';
+  var esc=function(t){return String(t).replace(/[&<>]/g,function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});};
+  var html='<h4>'+(h.status==='error'?'Needs attention':'Heads up')+'</h4>';
+  h.issues.forEach(function(i){
+    html+='<div class="hi"><div class="hw">'+esc(i.what)+'</div>'+
+          '<div>'+esc(i.why)+'</div>'+
+          (i.fix?'<div class="hf">Fix: <code>'+esc(i.fix)+'</code></div>':'')+'</div>';
+  });
+  el.innerHTML=html; el.style.display='block';
+}).catch(function(){/* health is diagnostics; never break the board */});
+</script>
+</body></html>"""
