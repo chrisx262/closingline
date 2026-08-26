@@ -250,6 +250,18 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   entries, but each card must show every team that entry has burned (a team
   is usable once), so that vertical space is the feature. A previous pass
   compacted them into a tab strip and was reverted — do not redo it.
+- 2026-08-25: survivor entries can be marked OUT (survivor_out_v1 =
+  {entryId: weekNumber}). Simulating week 20 showed the real problem was not
+  size — a 19-team card is only 159px and fits fine — but that the tool had
+  no idea an entry could die: it offered all ten Use buttons and, worse, the
+  weekly split kept diversifying across dead entries and pushed the live ones
+  onto weaker teams. Out entries now drop from useCols()/the Use buttons,
+  from renderPortfolio's ids, and from usedAny() (a corpse's history must not
+  lock teams for the survivors); they collapse to a 35px strip that expands
+  to show their history, and active() never resolves to a dead entry. Live
+  cards gained a "13 left" count (NFL_TEAMS - used). Entries section at week
+  20 with 2 alive: 657px -> 454px. Marking out is reversible ("back in") —
+  nothing is ever deleted, per invariant #1.
 
 ## Live deployment facts
 

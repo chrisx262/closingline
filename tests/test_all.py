@@ -489,6 +489,39 @@ check("survivor: only plausible teams get weight",
       "p.wp>=0.60" in sv_t)
 check("survivor: entry count persists per browser", "survivor_count_v1" in sv_t)
 
+# ------------------------------------------- survivor: knocked-out entries
+# A loss or a tie ends an entry. By week 20 most of a 10-entry portfolio is
+# dead, and a dead entry must stop influencing the live ones: it drops off
+# the per-pick Use buttons and out of the weekly split, or the split keeps
+# diversifying against corpses and pushes the survivors onto weaker teams.
+check("survivor: elimination state exists", "function isOut(" in sv_t)
+check("survivor: out state persists per browser", "survivor_out_v1" in sv_t)
+check("survivor: out entries are stamped with the week", "function outWeek(" in sv_t)
+check("survivor: an entry can be marked out and revived",
+      "function markOut(" in sv_t and "function reviveEntry(" in sv_t)
+check("survivor: alive list is derived from the out state", "function aliveIds()" in sv_t)
+check("survivor: Use buttons are built from live entries only",
+      "aliveIds().map(function(n)" in sv_t)
+check("survivor: the weekly split allocates to live entries only",
+      "ids=aliveIds()" in sv_t)
+check("survivor: the planner locks teams from live entries only",
+      "return aliveIds().some(" in sv_t)
+check("survivor: an all-out portfolio degrades gracefully",
+      "Every entry is marked out" in sv_t)
+check("survivor: the active entry never points at a dead one",
+      "if(isOut(a))" in sv_t)
+check("survivor: dead entries collapse instead of taking a full card",
+      ".entry.dead{" in sv_t)
+check("survivor: history of a dead entry is kept, not wiped",
+      "function toggleDead(" in sv_t)
+check("survivor: live cards show how many teams are still available",
+      "NFL_TEAMS-used.length" in sv_t)
+check("survivor: Use buttons keep the full 'Use E1' wording",
+      "'Use E'+n" in sv_t)
+check("survivor: Use buttons lay out across, not down",
+      "grid-template-columns:repeat('+useCols()" in sv_t
+      or "repeat('+useCols()+'" in sv_t)
+
 # ------------------------------------------------- health: public vs admin
 # The detailed report names env vars, deploy commands and raw error text.
 # That is an operator runbook, not something to print on a public homepage.

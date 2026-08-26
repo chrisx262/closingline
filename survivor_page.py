@@ -91,6 +91,28 @@ h2 em{font-style:normal;color:var(--up)}
 .uchip button{all:unset;cursor:pointer;opacity:.8;font-size:.7rem;line-height:1}
 .uchip button:hover{opacity:1}
 .entry .ehint{color:var(--dim);font-size:.64rem;margin-top:.4rem}
+.entry{position:relative}
+.linkbtn{all:unset;cursor:pointer;font-size:.6rem;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim);border-bottom:1px dotted var(--line)}
+.linkbtn:hover{color:var(--down);border-bottom-color:var(--down)}
+.outbtn{position:absolute;right:1rem;bottom:.55rem;opacity:0;transition:opacity .15s}
+.entry:hover .outbtn,.entry.active .outbtn{opacity:1}
+.entry .ecount b{color:var(--up)}
+.alivecount{font-size:.68rem;font-weight:800;letter-spacing:.06em;color:var(--down);
+  text-transform:uppercase;margin-left:.5rem}
+
+/* knocked-out entries: one slim strip each, tap to see the history back */
+.deadentries{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:.35rem;margin-top:.7rem;align-items:start}
+.entry.dead.open{grid-column:1/-1}
+@media (hover:none){.outbtn{opacity:1}}   /* no hover on a phone */
+.entry.dead{padding:.45rem .8rem;opacity:.62;box-shadow:none;background:transparent}
+.entry.dead:hover{transform:none;opacity:.85}
+.entry.dead .etop{gap:.6rem;justify-content:flex-start}
+.entry.dead .etitle{text-decoration:line-through;font-size:.76rem}
+.entry.dead .ecount{color:var(--down);letter-spacing:.06em;margin-right:auto}
+.entry.dead .caret{color:var(--dim);font-size:.7rem}
+.entry.dead .usedchips{margin-top:.5rem;min-height:0;filter:grayscale(.55)}
 
 /* week nav */
 .weeknav{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.2rem 0 1rem}
@@ -268,9 +290,10 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 </div>
 
 <section>
-  <h2>Your <em>Entries</em></h2>
+  <h2>Your <em>Entries</em> <span class="alivecount" id="alivecount"></span></h2>
   <p class="subnote">Tap an entry to make it active, then use the picks below. Used teams
-  are locked out for that entry. Stored in your browser only.</p>
+  are locked out for that entry. Lose one and hit <b>mark out</b> — it collapses out of
+  the way and stops counting toward the weekly split. Stored in your browser only.</p>
   <div class="ecount-ctl">
     <label for="nentries">How many entries do you play?</label>
     <button type="button" id="eminus" aria-label="one fewer entry">&minus;</button>
@@ -280,6 +303,7 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
     <span class="ehintsm">Circa allows up to 10 per person.</span>
   </div>
   <div class="entries" id="entries"></div>
+  <div class="deadentries" id="deadentries"></div>
 </section>
 
 <section>
@@ -320,7 +344,7 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 <section>
   <h2>Multi-week <em>Planner</em></h2>
   <p class="subnote">Top available survival options each week, so you can save premium teams
-  and keep unused teams for the holiday legs. Struck-through = already used by an entry.</p>
+  and keep unused teams for the holiday legs. Struck-through = already used by a live entry.</p>
   <div class="planwrap" id="planner"></div>
 </section>
 
@@ -360,6 +384,7 @@ LAR:'#003594',LAC:'#0080C6',LV:'#000000',MIA:'#008E97',MIN:'#4F2683',NE:'#002244
 NO:'#D3BC8D',NYG:'#0B2265',NYJ:'#125740',PHI:'#004C54',PIT:'#FFB612',SF:'#AA0000',
 SEA:'#002244',TB:'#D50A0A',TEN:'#0C2340',WAS:'#5A1414',WSH:'#5A1414'};
 function tcol(t){return TC[t]||'#475569';}
+var NFL_TEAMS=32;   /* franchises, for the "teams left" count (TC has aliases) */
 
 /* ---------- Circa 2026 holiday legs (only these teams are pickable those days) ---------- */
 var HOLIDAY_LEGS=[
@@ -382,7 +407,7 @@ function entryIds(){var a=[],n=entryCount();for(var i=1;i<=n;i++)a.push(String(i
 function blankEntries(){var o={};entryIds().forEach(function(n){o[n]=[];});return o;}
 /* at most five "use on entry" buttons per row, so ten entries make two short
    rows instead of one tall column */
-function useCols(){return Math.min(entryCount(),5);}
+function useCols(){return Math.max(1,Math.min(aliveIds().length,5));}
 function entries(){
   var o;try{o=JSON.parse(localStorage.getItem(EK))||{}}catch(e){o={}}
   entryIds().forEach(function(n){if(!Array.isArray(o[n]))o[n]=[];});
@@ -392,13 +417,46 @@ function setEntryCount(n){
   localStorage.setItem(NK,String(n));
   /* keep any teams already recorded on entries that still exist; never wipe
      silently -- a dropped entry's history stays in storage if they add it back */
-  if(parseInt(active(),10)>n)setActive('1');
+  if(parseInt(active(),10)>n){var al=aliveIds();setActive(al.length?al[0]:'1');}
   renderAll();}
 function saveEntries(e){localStorage.setItem(EK,JSON.stringify(e))}
-function active(){return localStorage.getItem(AK)||'1'}
+function active(){var a=localStorage.getItem(AK)||'1';
+  if(isOut(a)){var al=aliveIds();if(al.length)return al[0];}
+  return a;}
 function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner()}
 function usedBy(n){return entries()[n]||[]}
-function usedAny(t){var e=entries();return entryIds().some(function(n){return (e[n]||[]).indexOf(t)>=0})}
+/* only LIVE entries lock a team out of the planner -- a dead entry's history
+   must not steer the entries that are still playing */
+function usedAny(t){var e=entries();return aliveIds().some(function(n){return (e[n]||[]).indexOf(t)>=0})}
+
+/* ---------- elimination ----------
+   A loss OR a tie ends an entry, but the entry's used teams stay on record.
+   Out entries collapse to a strip, drop off the per-pick Use buttons, and are
+   excluded from the weekly split -- otherwise the split keeps diversifying
+   against entries that are already dead and pushes the live ones onto worse
+   teams. Storage: {entryId: weekNumber} (0 when the week is unknown). */
+var OUTK='survivor_out_v1';
+function outMap(){var o;try{o=JSON.parse(localStorage.getItem(OUTK))||{}}catch(e){o={}}
+  return (o&&typeof o==='object')?o:{};}
+function isOut(n){return outMap()[n]!=null;}
+function outWeek(n){var w=outMap()[n];return (typeof w==='number'&&w>0)?w:null;}
+function aliveIds(){return entryIds().filter(function(n){return !isOut(n);});}
+function curWeekNo(){return (WEEKS.length&&WEEKS[curIdx])?WEEKS[curIdx].week:0;}
+function markOut(n){
+  n=String(n);
+  var o=outMap();o[n]=curWeekNo();localStorage.setItem(OUTK,JSON.stringify(o));
+  /* never leave the active entry pointing at a dead one */
+  if(active()===n){var a=aliveIds();if(a.length)localStorage.setItem(AK,a[0]);}
+  toast('Entry '+n+' marked out'+(o[n]?' (week '+o[n]+')':''));
+  renderAll();
+}
+function reviveEntry(n){
+  n=String(n);var o=outMap();delete o[n];localStorage.setItem(OUTK,JSON.stringify(o));
+  toast('Entry '+n+' is back in');renderAll();
+}
+/* which dead entries are expanded to show their history -- view state only */
+var EXPANDED={};
+function toggleDead(n){n=String(n);EXPANDED[n]=!EXPANDED[n];renderEntries();}
 
 function useTeam(team,n){
   var e=entries();if(e[n].indexOf(team)>=0)return;
@@ -415,18 +473,37 @@ function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
   t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},1600)}
 
 function renderEntries(){
-  var e=entries(),act=active(),h='';
+  var e=entries(),act=active(),h='',dead='';
+  function chipsFor(n,used,removable){
+    return used.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
+      '">'+t+(removable?' <button title="remove" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button>':'')+
+      '</span>';}).join('') || '<span class="ehint">No teams used yet</span>';
+  }
   entryIds().forEach(function(n){
     var used=e[n]||[];
-    var chips=used.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
-      '">'+t+' <button title="remove" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button></span>';}).join('')
-      || '<span class="ehint">No teams used yet</span>';
+    if(isOut(n)){
+      var wk=outWeek(n);
+      dead+='<div class="entry dead'+(EXPANDED[n]?' open':'')+'" onclick="toggleDead('+n+')">'+
+        '<div class="etop"><span class="etitle">Entry '+n+'</span>'+
+        '<span class="ecount">out'+(wk?' · wk '+wk:'')+' · '+used.length+' used</span>'+
+        '<button class="linkbtn" onclick="event.stopPropagation();reviveEntry('+n+')">back in</button>'+
+        '<span class="caret">'+(EXPANDED[n]?'▴':'▾')+'</span></div>'+
+        (EXPANDED[n]?'<div class="usedchips">'+chipsFor(n,used,false)+'</div>':'')+
+        '</div>';
+      return;
+    }
     h+='<div class="entry'+(act===n?' active':'')+'" onclick="setActive('+n+')">'+
        '<div class="etop"><span class="etitle">Entry '+n+(act===n?' · active':'')+'</span>'+
-       '<span class="ecount">'+used.length+'/20 used</span></div>'+
-       '<div class="usedchips">'+chips+'</div></div>';
+       '<span class="ecount">'+used.length+'/20 used · <b>'+(NFL_TEAMS-used.length)+' left</b></span></div>'+
+       '<div class="usedchips">'+chipsFor(n,used,true)+'</div>'+
+       '<button class="linkbtn outbtn" onclick="event.stopPropagation();markOut('+n+')">mark out</button>'+
+       '</div>';
   });
   document.getElementById('entries').innerHTML=h;
+  document.getElementById('deadentries').innerHTML=dead;
+  var alive=aliveIds().length, total=entryIds().length;
+  document.getElementById('alivecount').textContent=
+    alive===total ? '' : alive+' of '+total+' alive';
 }
 
 /* ---------- home-field lean (subjective ranking tilt, not the market number) ---------- */
@@ -577,7 +654,7 @@ function renderBoard(){
        '</div>'+
        '<div class="right"><div class="wp '+t[1]+'"><b>'+Math.round(p.wp*100)+'%</b><i class="tier">'+t[0]+'</i></div>'+
        '<div class="usebtns" style="grid-template-columns:repeat('+useCols()+',1fr)">'+
-       entryIds().map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
+       aliveIds().map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
          return '<button '+(u?'disabled':'')+' title="'+(u?'already used by entry '+n:'use '+p.team+' on entry '+n)+
            '" onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'Use E'+n)+'</button>';}).join('')+
        '</div></div></div>';
@@ -588,8 +665,9 @@ function renderBoard(){
 function renderPortfolio(){
   var el=document.getElementById('portfolio');
   if(!WEEKS.length){el.innerHTML='<div class="empty">Portfolio suggestion appears once lines post.</div>';return;}
-  var w=WEEKS[curIdx], teams=weekTeams(w), ids=entryIds(), N=ids.length;
+  var w=WEEKS[curIdx], teams=weekTeams(w), ids=aliveIds(), N=ids.length;
   if(!teams.length){el.innerHTML='<div class="empty">No games to allocate this week.</div>';return;}
+  if(!N){el.innerHTML='<div class="empty">Every entry is marked out — nothing left to split.</div>';return;}
 
   /* ---- how many entries go on each team ------------------------------
      Real multi-entry play STACKS: several entries on the safest board, a
@@ -678,7 +756,8 @@ function renderPortfolio(){
       (p?'<div class="apick"><span class="tchip" style="background:'+tcol(p.team)+'">'+p.team+
         '</span><b>'+p.team+'</b> <span class="awp">'+Math.round(p.wp*100)+'%</span></div>':
         '<div class="apick" style="color:var(--dim)">No team left — plan ahead</div>')+'</div>';}).join('');
-  el.innerHTML='<div class="callout"><h3>Suggested Week '+w.week+' split</h3>'+
+  el.innerHTML='<div class="callout"><h3>Suggested Week '+w.week+' split'+
+    (N<entryIds().length?' — '+N+(N===1?' live entry':' live entries'):'')+'</h3>'+
     '<div class="allocs">'+cards+'</div><p class="why">'+why+'</p></div>';
 }
 
