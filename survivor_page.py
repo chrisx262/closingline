@@ -76,11 +76,16 @@ h2 em{font-style:normal;color:var(--up)}
 
 /* entry manager */
 .entries{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}
-.entry{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+/* alive = green edge, out = red edge, at a glance. The active entry keeps the
+   gold ring on top of its green border, so "which one am I picking for" and
+   "is it still alive" stay two separate signals. */
+.entry{background:var(--panel);border:1px solid var(--up);border-radius:10px;
   padding:.9rem 1rem;box-shadow:var(--shadow);cursor:pointer;
   transition:border-color .2s,transform .15s}
 .entry:hover{transform:translateY(-2px)}
-.entry.active{border-color:var(--gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 30%,transparent)}
+/* no var(--shadow) in this list -- it is `none` in dark mode, which would make
+   the whole box-shadow declaration invalid and drop the ring */
+.entry.active{box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 45%,transparent)}
 .entry .etop{display:flex;justify-content:space-between;align-items:center}
 .entry .etitle{font-weight:800;font-size:.82rem}
 .entry .ecount{font-size:.62rem;font-weight:800;letter-spacing:.1em;
@@ -106,8 +111,9 @@ h2 em{font-style:normal;color:var(--up)}
   gap:.35rem;margin-top:.7rem;align-items:start}
 .entry.dead.open{grid-column:1/-1}
 @media (hover:none){.outbtn{opacity:1}}   /* no hover on a phone */
-.entry.dead{padding:.45rem .8rem;opacity:.62;box-shadow:none;background:transparent}
-.entry.dead:hover{transform:none;opacity:.85}
+.entry.dead{padding:.45rem .8rem;opacity:.72;box-shadow:none;background:transparent;
+  border-color:color-mix(in srgb,var(--down) 55%,transparent)}
+.entry.dead:hover{transform:none;opacity:1;border-color:var(--down)}
 .entry.dead .etop{gap:.6rem;justify-content:flex-start}
 .entry.dead .etitle{text-decoration:line-through;font-size:.76rem}
 .entry.dead .ecount{color:var(--down);letter-spacing:.06em;margin-right:auto}

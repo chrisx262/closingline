@@ -518,6 +518,14 @@ check("survivor: live cards show how many teams are still available",
       "NFL_TEAMS-used.length" in sv_t)
 check("survivor: Use buttons keep the full 'Use E1' wording",
       "'Use E'+n" in sv_t)
+check("survivor: live entries carry a green border",
+      "border:1px solid var(--up)" in sv_t)
+check("survivor: out entries carry a red border",
+      "border-color:color-mix(in srgb,var(--down)" in sv_t)
+# --shadow is `none` in dark mode; listing it after another shadow makes the
+# whole declaration invalid and silently drops the active ring.
+check("survivor: active ring does not compose with var(--shadow)",
+      "0 0 0 2px color-mix(in srgb,var(--gold) 45%,transparent)}" in sv_t)
 check("survivor: Use buttons lay out across, not down",
       "grid-template-columns:repeat('+useCols()" in sv_t
       or "repeat('+useCols()+'" in sv_t)
