@@ -93,6 +93,9 @@ h2 em{font-style:normal;color:var(--up)}
 .usedchips{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.55rem;min-height:1.6rem}
 .uchip{display:inline-flex;align-items:center;gap:.25rem;font-weight:800;
   font-size:.62rem;color:#fff;padding:.2rem .4rem;border-radius:5px}
+.uchip .cwk{font-style:normal;font-size:.52rem;font-weight:900;opacity:.72;
+  margin-right:.25rem;letter-spacing:.02em}
+.uchip.thisweek{box-shadow:0 0 0 2px var(--ink)}
 .uchip button{all:unset;cursor:pointer;opacity:.8;font-size:.7rem;line-height:1}
 .uchip button:hover{opacity:1}
 .entry .ehint{color:var(--dim);font-size:.64rem;margin-top:.4rem}
@@ -217,6 +220,11 @@ h2 em{font-style:normal;color:var(--up)}
   color:var(--dim)}
 .alloc .apick{display:flex;align-items:center;gap:.45rem;margin-top:.4rem}
 .alloc .awp{font-weight:900;font-variant-numeric:tabular-nums}
+/* an entry that has already locked this week's pick */
+.alloc.done{border-color:color-mix(in srgb,var(--up) 45%,var(--line));
+  background:color-mix(in srgb,var(--up) 6%,var(--panel))}
+.alloc.done .awp{font-size:.6rem;font-weight:900;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--up)}
 .callout .why{color:var(--dim);font-size:.74rem;margin:.7rem 0 0}
 
 /* planner */
@@ -414,10 +422,28 @@ function blankEntries(){var o={};entryIds().forEach(function(n){o[n]=[];});retur
 /* at most five "use on entry" buttons per row, so ten entries make two short
    rows instead of one tall column */
 function useCols(){return Math.max(1,Math.min(aliveIds().length,5));}
+/* A pick is {t:team, w:week}. It used to be a bare team name, which meant the
+   tool could not tell WHICH week a team was used in -- so nothing stopped an
+   entry taking two teams in the same week, which is not a thing you can do.
+   Old flat lists migrate to w:0 ("week unknown"): they still burn the team
+   for the season, they just do not lock any particular week. */
+function normPicks(a){
+  if(!Array.isArray(a))return [];
+  return a.map(function(x){
+    if(typeof x==='string')return {t:x,w:0};
+    if(x&&typeof x.t==='string')return {t:x.t,w:(typeof x.w==='number'?x.w:0)};
+    return null;}).filter(Boolean);
+}
 function entries(){
   var o;try{o=JSON.parse(localStorage.getItem(EK))||{}}catch(e){o={}}
-  entryIds().forEach(function(n){if(!Array.isArray(o[n]))o[n]=[];});
+  entryIds().forEach(function(n){o[n]=normPicks(o[n]);});
   return o;}
+function picksOf(n){return entries()[n]||[]}
+/* the pick this entry already made in a given week, if any */
+function pickForWeek(n,wk){
+  if(!wk)return null;
+  var f=picksOf(n).filter(function(p){return p.w===wk;});
+  return f.length?f[0]:null;}
 function setEntryCount(n){
   n=Math.max(1,Math.min(MAX_ENTRIES,parseInt(n,10)||1));
   localStorage.setItem(NK,String(n));
@@ -430,10 +456,11 @@ function active(){var a=localStorage.getItem(AK)||'1';
   if(isOut(a)){var al=aliveIds();if(al.length)return al[0];}
   return a;}
 function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner()}
-function usedBy(n){return entries()[n]||[]}
+function usedBy(n){return picksOf(n).map(function(p){return p.t;})}
 /* only LIVE entries lock a team out of the planner -- a dead entry's history
    must not steer the entries that are still playing */
-function usedAny(t){var e=entries();return aliveIds().some(function(n){return (e[n]||[]).indexOf(t)>=0})}
+function usedAny(t){var e=entries();return aliveIds().some(function(n){
+  return (e[n]||[]).some(function(p){return p.t===t;});})}
 
 /* ---------- elimination ----------
    A loss OR a tie ends an entry, but the entry's used teams stay on record.
@@ -465,14 +492,19 @@ var EXPANDED={};
 function toggleDead(n){n=String(n);EXPANDED[n]=!EXPANDED[n];renderEntries();}
 
 function useTeam(team,n){
-  var e=entries();if(e[n].indexOf(team)>=0)return;
-  e[n].push(team);saveEntries(e);
+  var e=entries(),wk=curWeekNo();
+  if(usedBy(n).indexOf(team)>=0)return;
+  /* one team per entry per week -- swap by removing the existing pick first */
+  var have=pickForWeek(n,wk);
+  if(have){toast('Entry '+n+' already has '+have.t+' for week '+wk+' — ✕ it first to switch');return;}
+  e[n].push({t:team,w:wk});saveEntries(e);
   var hl=holidayLegsFor(team);
-  toast(team+' → Entry '+n+(hl.length?' — note: plays the '+hl.map(function(l){return l.name;}).join(' & '):''));
+  toast(team+' → Entry '+n+(wk?' (week '+wk+')':'')+
+        (hl.length?' — note: plays the '+hl.map(function(l){return l.name;}).join(' & '):''));
   renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
 }
 function dropTeam(team,n){
-  var e=entries();e[n]=e[n].filter(function(t){return t!==team});saveEntries(e);
+  var e=entries();e[n]=e[n].filter(function(p){return p.t!==team});saveEntries(e);
   renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
 }
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
@@ -480,10 +512,14 @@ function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
 
 function renderEntries(){
   var e=entries(),act=active(),h='',dead='';
-  function chipsFor(n,used,removable){
-    return used.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
-      '">'+t+(removable?' <button title="remove" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button>':'')+
-      '</span>';}).join('') || '<span class="ehint">No teams used yet</span>';
+  var wkNow=curWeekNo();
+  function chipsFor(n,picks,removable){
+    return picks.map(function(p){
+      var t=p.t, ttl=p.w?('week '+p.w):'week not recorded';
+      return '<span class="uchip'+(p.w&&p.w===wkNow?' thisweek':'')+'" title="'+t+' · '+ttl+
+        '" style="background:'+tcol(t)+'">'+(p.w?'<i class="cwk">W'+p.w+'</i>':'')+t+
+        (removable?' <button title="remove '+t+'" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button>':'')+
+        '</span>';}).join('') || '<span class="ehint">No teams used yet</span>';
   }
   entryIds().forEach(function(n){
     var used=e[n]||[];
@@ -632,6 +668,7 @@ function renderBoard(){
     document.getElementById('wtitle').textContent='Week —';
     document.getElementById('wsrc').textContent='';return;}
   var w=WEEKS[curIdx], teams=weekTeams(w), fut=futureMap(), pops=popEstimates(teams), act=active();
+  var wkNo=w.week;
   document.getElementById('wtitle').textContent='Week '+w.week;
   var src=(w.games.find(function(g){return g.wp_source;})||{}).wp_source;
   document.getElementById('wsrc').textContent=src?('win prob from '+(src==='ml'?'market moneyline':'market spread')):'';
@@ -660,9 +697,15 @@ function renderBoard(){
        '</div>'+
        '<div class="right"><div class="wp '+t[1]+'"><b>'+Math.round(p.wp*100)+'%</b><i class="tier">'+t[0]+'</i></div>'+
        '<div class="usebtns" style="grid-template-columns:repeat('+useCols()+',1fr)">'+
-       aliveIds().map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
-         return '<button '+(u?'disabled':'')+' title="'+(u?'already used by entry '+n:'use '+p.team+' on entry '+n)+
-           '" onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'Use E'+n)+'</button>';}).join('')+
+       aliveIds().map(function(n){
+         var u=usedBy(n).indexOf(p.team)>=0;
+         /* already spent this week on someone else -- locked until that pick is removed */
+         var lk=!u&&pickForWeek(n,wkNo);
+         var ttl=u?('already used by entry '+n):
+                 lk?('entry '+n+' already has '+lk.t+' for week '+wkNo+' — remove it to switch'):
+                    ('use '+p.team+' on entry '+n);
+         return '<button '+(u||lk?'disabled':'')+' title="'+ttl+'"'+
+           ' onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'Use E'+n)+'</button>';}).join('')+
        '</div></div></div>';
   });
   el.innerHTML=h+'</div>';
@@ -671,9 +714,21 @@ function renderBoard(){
 function renderPortfolio(){
   var el=document.getElementById('portfolio');
   if(!WEEKS.length){el.innerHTML='<div class="empty">Portfolio suggestion appears once lines post.</div>';return;}
-  var w=WEEKS[curIdx], teams=weekTeams(w), ids=aliveIds(), N=ids.length;
+  var w=WEEKS[curIdx], teams=weekTeams(w);
   if(!teams.length){el.innerHTML='<div class="empty">No games to allocate this week.</div>';return;}
-  if(!N){el.innerHTML='<div class="empty">Every entry is marked out — nothing left to split.</div>';return;}
+  if(!aliveIds().length){el.innerHTML='<div class="empty">Every entry is marked out — nothing left to split.</div>';return;}
+  /* entries that already made this week's pick are settled -- the split is for
+     the ones still to choose, so it never suggests a second team for a week */
+  var settled=aliveIds().filter(function(n){return !!pickForWeek(n,w.week);});
+  var ids=aliveIds().filter(function(n){return settled.indexOf(n)<0;}), N=ids.length;
+  var settledCards=settled.map(function(n){var p=pickForWeek(n,w.week);
+    return '<div class="alloc done"><div class="ehead">Entry '+n+'</div>'+
+      '<div class="apick"><span class="tchip" style="background:'+tcol(p.t)+'">'+p.t+
+      '</span><b>'+p.t+'</b> <span class="awp">picked</span></div></div>';}).join('');
+  if(!N){el.innerHTML='<div class="callout"><h3>Week '+w.week+' is set</h3>'+
+    '<div class="allocs">'+settledCards+'</div>'+
+    '<p class="why">Every live entry already has a pick for this week. Remove one with '+
+    'the ✕ on its chip if you want to change it.</p></div>';return;}
 
   /* ---- how many entries go on each team ------------------------------
      Real multi-entry play STACKS: several entries on the safest board, a
@@ -763,8 +818,8 @@ function renderPortfolio(){
         '</span><b>'+p.team+'</b> <span class="awp">'+Math.round(p.wp*100)+'%</span></div>':
         '<div class="apick" style="color:var(--dim)">No team left — plan ahead</div>')+'</div>';}).join('');
   el.innerHTML='<div class="callout"><h3>Suggested Week '+w.week+' split'+
-    (N<entryIds().length?' — '+N+(N===1?' live entry':' live entries'):'')+'</h3>'+
-    '<div class="allocs">'+cards+'</div><p class="why">'+why+'</p></div>';
+    (N<entryIds().length?' — '+N+(N===1?' entry still to pick':' entries still to pick'):'')+'</h3>'+
+    '<div class="allocs">'+settledCards+cards+'</div><p class="why">'+why+'</p></div>';
 }
 
 function renderPlanner(){

@@ -518,6 +518,32 @@ check("survivor: live cards show how many teams are still available",
       "NFL_TEAMS-used.length" in sv_t)
 check("survivor: Use buttons keep the full 'Use E1' wording",
       "'Use E'+n" in sv_t)
+# ------------------------------------- survivor: one pick per entry per week
+# You make exactly one pick per entry per week. Picks used to be stored as a
+# bare team name with no week, so nothing stopped an entry taking two teams in
+# the same week -- which is not a move that exists in survivor.
+check("survivor: a pick records the week it was made", "{t:team,w:wk}" in sv_t)
+check("survivor: old flat pick lists still migrate", "function normPicks(" in sv_t)
+check("survivor: migrated picks keep burning the team",
+      "return {t:x,w:0}" in sv_t)
+check("survivor: a week's existing pick can be looked up",
+      "function pickForWeek(" in sv_t)
+check("survivor: a second pick in the same week is refused",
+      "already has '+have.t+' for week" in sv_t)
+check("survivor: the refusal explains how to switch", "✕ it first to switch" in sv_t)
+check("survivor: the locked entry's buttons are disabled, not just refused",
+      "var lk=!u&&pickForWeek(n,wkNo)" in sv_t)
+check("survivor: locking is keyed to the week on screen, not the current week",
+      "var wkNo=w.week" in sv_t)
+check("survivor: removing a pick frees that week again",
+      "return p.t!==team" in sv_t)
+check("survivor: chips show which week each team was used",
+      "'<i class=\"cwk\">W'+p.w+'</i>'" in sv_t)
+check("survivor: the split skips entries that already picked this week",
+      "var settled=aliveIds().filter(" in sv_t)
+check("survivor: a fully-picked week says so instead of suggesting more",
+      "is set</h3>" in sv_t)
+
 check("survivor: live entries carry a green border",
       "border:1px solid var(--up)" in sv_t)
 check("survivor: out entries carry a red border",

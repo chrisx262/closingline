@@ -250,6 +250,16 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   entries, but each card must show every team that entry has burned (a team
   is usable once), so that vertical space is the feature. A previous pass
   compacted them into a tab strip and was reverted — do not redo it.
+- 2026-08-25: survivor picks are now {t:team, w:week}, not bare team names.
+  The old flat list had no week on it, so the tool could not tell that an
+  entry had already picked this week — the owner hit this immediately by
+  putting two teams on Entry 1 in week 4. One pick per entry per week is now
+  enforced in useTeam() AND reflected in the board (that entry's Use buttons
+  disable across the whole week), keyed to the week ON SCREEN (wkNo=w.week),
+  not to "today". Removing the chip frees the week. normPicks() migrates old
+  lists to w:0 = "week unknown": those still burn the team for the season but
+  lock no week, so nobody's saved history breaks. The weekly split now skips
+  entries that already picked this week and shows them as settled cards.
 - 2026-08-25: survivor entries can be marked OUT (survivor_out_v1 =
   {entryId: weekNumber}). Simulating week 20 showed the real problem was not
   size — a 19-team card is only 159px and fits fine — but that the tool had
