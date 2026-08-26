@@ -239,15 +239,17 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   a ceiling not a quota; weekly-only bettors are naturally compatible.
 - 2026-07-13: additive schema changes via _migrate_additive() in app.py
   (try/except ALTER) — create_all can't alter existing Postgres tables.
-- 2026-08-25: survivor page — anything that renders once per entry must run
-  ACROSS, not DOWN. Going 3 -> 10 entries turned the per-row "Use E1..E10"
-  column into a 250px-tall stack, so each pick card was three times taller
-  than the pick it described. Now a grid of at most five columns (useCols(),
-  set inline from entryCount) with short "E1" labels under a "use on entry"
-  caption; pick rows are ~99px at 3 and at 10 entries. The entry cards became
-  a compact horizontal tab strip for the same reason, with the removable used-
-  team chips moved into one detail row for the active entry (tabs keep a colour
-  dot per burned team). Entries section: ~520px -> 309px at 10 entries.
+- 2026-08-25: survivor page — the per-pick "Use E1..E10" buttons run ACROSS,
+  not down. Going 3 -> 10 entries turned that column into a 250px-tall stack,
+  so every pick card was three times taller than the pick it described. Now a
+  grid of at most five columns (useCols(), set inline from entryCount); pick
+  rows are ~99px at 3 entries and at 10. Full "Use E1" wording is kept — the
+  owner asked for it explicitly — and the mobile rule shrinks type/padding so
+  five still fit a 360px phone rather than dropping to fewer columns.
+  The ENTRY CARDS ARE DELIBERATELY LEFT ALONE: they look oversized with 10
+  entries, but each card must show every team that entry has burned (a team
+  is usable once), so that vertical space is the feature. A previous pass
+  compacted them into a tab strip and was reverted — do not redo it.
 
 ## Live deployment facts
 

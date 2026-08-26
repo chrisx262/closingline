@@ -74,33 +74,23 @@ h2{font-size:1.05rem;font-weight:800;margin:0 0 .2rem;text-transform:uppercase}
 h2 em{font-style:normal;color:var(--up)}
 .subnote{color:var(--dim);font-size:.8rem;margin:0 0 1rem}
 
-/* entry manager -- a compact horizontal strip. Ten entries as full cards made
-   this section taller than the board below it, so each entry is a small tab
-   (name, count, a colour dot per used team) and the removable chips live in
-   one detail row for whichever entry is active. */
-.entries{display:flex;flex-wrap:wrap;gap:.45rem}
-.entry{background:var(--panel);border:1px solid var(--line);border-radius:9px;
-  padding:.42rem .55rem;box-shadow:var(--shadow);cursor:pointer;
-  flex:0 0 auto;min-width:5.6rem;
+/* entry manager */
+.entries{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}
+.entry{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.9rem 1rem;box-shadow:var(--shadow);cursor:pointer;
   transition:border-color .2s,transform .15s}
 .entry:hover{transform:translateY(-2px)}
 .entry.active{border-color:var(--gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 30%,transparent)}
-.entry .etop{display:flex;justify-content:space-between;align-items:center;gap:.45rem}
-.entry .etitle{font-weight:800;font-size:.74rem}
-.entry .ecount{font-size:.6rem;font-weight:800;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--dim);font-variant-numeric:tabular-nums}
-.entry .edots{display:flex;flex-wrap:wrap;gap:2px;margin-top:.3rem;min-height:6px}
-.entry .edot{width:6px;height:6px;border-radius:2px}
-.edetail{margin-top:.7rem;background:var(--panel);border:1px solid var(--line);
-  border-radius:10px;padding:.7rem .85rem;box-shadow:var(--shadow)}
-.edetail .edhead{font-weight:800;font-size:.66rem;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--dim);margin-bottom:.45rem}
-.usedchips{display:flex;gap:.3rem;flex-wrap:wrap;min-height:1.6rem}
+.entry .etop{display:flex;justify-content:space-between;align-items:center}
+.entry .etitle{font-weight:800;font-size:.82rem}
+.entry .ecount{font-size:.62rem;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim)}
+.usedchips{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.55rem;min-height:1.6rem}
 .uchip{display:inline-flex;align-items:center;gap:.25rem;font-weight:800;
   font-size:.62rem;color:#fff;padding:.2rem .4rem;border-radius:5px}
 .uchip button{all:unset;cursor:pointer;opacity:.8;font-size:.7rem;line-height:1}
 .uchip button:hover{opacity:1}
-.ehint{color:var(--dim);font-size:.64rem}
+.entry .ehint{color:var(--dim);font-size:.64rem;margin-top:.4rem}
 
 /* week nav */
 .weeknav{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.2rem 0 1rem}
@@ -180,13 +170,11 @@ h2 em{font-style:normal;color:var(--up)}
    a grid of at most five columns (JS sets the column count from the entry count). */
 .usebtns{display:grid;gap:.25rem;justify-content:end;align-content:center}
 .usebtns button{all:unset;cursor:pointer;font-weight:800;font-size:.6rem;
-  letter-spacing:.05em;text-align:center;padding:.24rem .35rem;border-radius:6px;
-  border:1px solid var(--line);color:var(--dim);min-width:2.5rem;
+  letter-spacing:.03em;text-align:center;padding:.24rem .4rem;border-radius:6px;
+  border:1px solid var(--line);color:var(--dim);min-width:3.1rem;white-space:nowrap;
   font-variant-numeric:tabular-nums}
 .usebtns button:hover{border-color:var(--gold);color:var(--gold)}
 .usebtns button:disabled{opacity:.3;cursor:not-allowed}
-.usebtns .ulabel{grid-column:1/-1;font-size:.5rem;font-weight:900;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--dim);text-align:right;margin-bottom:.05rem}
 
 /* callouts */
 .callout{background:color-mix(in srgb,var(--gold) 8%,var(--panel));
@@ -229,13 +217,13 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 .rg{margin-top:.7rem;font-weight:700;color:var(--dim)}
 .rg span{color:var(--down)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-@media (max-width:760px){.allocs{grid-template-columns:1fr}
-  .entries{gap:.35rem}.entry{min-width:4.9rem;flex:1 0 auto}
+@media (max-width:760px){.entries,.allocs{grid-template-columns:1fr}
   .pick{grid-template-columns:1.7rem 1fr}.right{grid-column:1/-1;justify-content:space-between;
   margin-top:.2rem}
-  /* five buttons across still have to fit a phone next to the win-prob block */
-  .usebtns{gap:.2rem}
-  .usebtns button{min-width:2.15rem;padding:.24rem .2rem;font-size:.56rem}}
+  /* keep five "Use E10" buttons across on a phone: tighter type, no min-width */
+  .usebtns{gap:.16rem}
+  .usebtns button{min-width:0;padding:.22rem .14rem;font-size:.5rem;letter-spacing:0}
+  .wp{min-width:3.6rem;padding:.4rem .3rem}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;opacity:1!important;
   transition:none!important}}
 
@@ -281,9 +269,8 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 
 <section>
   <h2>Your <em>Entries</em></h2>
-  <p class="subnote">Tap an entry to make it active, then use the picks below. Its used
-  teams show underneath and stay locked out for that entry — the dots on each tab are
-  the teams it has burned. Stored in your browser only.</p>
+  <p class="subnote">Tap an entry to make it active, then use the picks below. Used teams
+  are locked out for that entry. Stored in your browser only.</p>
   <div class="ecount-ctl">
     <label for="nentries">How many entries do you play?</label>
     <button type="button" id="eminus" aria-label="one fewer entry">&minus;</button>
@@ -293,7 +280,6 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
     <span class="ehintsm">Circa allows up to 10 per person.</span>
   </div>
   <div class="entries" id="entries"></div>
-  <div class="edetail" id="edetail"></div>
 </section>
 
 <section>
@@ -432,24 +418,15 @@ function renderEntries(){
   var e=entries(),act=active(),h='';
   entryIds().forEach(function(n){
     var used=e[n]||[];
-    var dots=used.map(function(t){return '<i class="edot" style="background:'+tcol(t)+
-      '" title="'+t+'"></i>';}).join('');
-    h+='<div class="entry'+(act===n?' active':'')+'" onclick="setActive('+n+')" '+
-       'title="Entry '+n+' — '+(used.length?used.join(', '):'no teams used yet')+'">'+
-       '<div class="etop"><span class="etitle">Entry '+n+'</span>'+
-       '<span class="ecount">'+used.length+'/20</span></div>'+
-       '<div class="edots">'+dots+'</div></div>';
+    var chips=used.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
+      '">'+t+' <button title="remove" onclick="event.stopPropagation();dropTeam(\\''+t+'\\','+n+')">✕</button></span>';}).join('')
+      || '<span class="ehint">No teams used yet</span>';
+    h+='<div class="entry'+(act===n?' active':'')+'" onclick="setActive('+n+')">'+
+       '<div class="etop"><span class="etitle">Entry '+n+(act===n?' · active':'')+'</span>'+
+       '<span class="ecount">'+used.length+'/20 used</span></div>'+
+       '<div class="usedchips">'+chips+'</div></div>';
   });
   document.getElementById('entries').innerHTML=h;
-
-  /* removable chips for the active entry only -- keeps the strip short */
-  var au=e[act]||[];
-  var chips=au.map(function(t){return '<span class="uchip" style="background:'+tcol(t)+
-    '">'+t+' <button title="remove" onclick="dropTeam(\\''+t+'\\','+act+')">✕</button></span>';}).join('')
-    || '<span class="ehint">No teams used yet</span>';
-  document.getElementById('edetail').innerHTML=
-    '<div class="edhead">Entry '+act+' · active · '+au.length+'/20 used</div>'+
-    '<div class="usedchips">'+chips+'</div>';
 }
 
 /* ---------- home-field lean (subjective ranking tilt, not the market number) ---------- */
@@ -599,11 +576,10 @@ function renderBoard(){
        '<div class="pop">est. popularity <span class="popbar"><i style="width:'+Math.max(3,pop)+'%"></i></span> ~'+pop+'%</div>'+
        '</div>'+
        '<div class="right"><div class="wp '+t[1]+'"><b>'+Math.round(p.wp*100)+'%</b><i class="tier">'+t[0]+'</i></div>'+
-       '<div class="usebtns" style="grid-template-columns:repeat('+useCols()+',auto)">'+
-       '<span class="ulabel">use on entry</span>'+
+       '<div class="usebtns" style="grid-template-columns:repeat('+useCols()+',1fr)">'+
        entryIds().map(function(n){var u=usedBy(n).indexOf(p.team)>=0;
          return '<button '+(u?'disabled':'')+' title="'+(u?'already used by entry '+n:'use '+p.team+' on entry '+n)+
-           '" onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'E'+n)+'</button>';}).join('')+
+           '" onclick="useTeam(\\''+p.team+'\\','+n+')">'+(u?'E'+n+' ✓':'Use E'+n)+'</button>';}).join('')+
        '</div></div></div>';
   });
   el.innerHTML=h+'</div>';
