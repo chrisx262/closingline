@@ -239,6 +239,15 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   a ceiling not a quota; weekly-only bettors are naturally compatible.
 - 2026-07-13: additive schema changes via _migrate_additive() in app.py
   (try/except ALTER) — create_all can't alter existing Postgres tables.
+- 2026-08-25: survivor page — anything that renders once per entry must run
+  ACROSS, not DOWN. Going 3 -> 10 entries turned the per-row "Use E1..E10"
+  column into a 250px-tall stack, so each pick card was three times taller
+  than the pick it described. Now a grid of at most five columns (useCols(),
+  set inline from entryCount) with short "E1" labels under a "use on entry"
+  caption; pick rows are ~99px at 3 and at 10 entries. The entry cards became
+  a compact horizontal tab strip for the same reason, with the removable used-
+  team chips moved into one detail row for the active entry (tabs keep a colour
+  dot per burned team). Entries section: ~520px -> 309px at 10 entries.
 
 ## Live deployment facts
 
