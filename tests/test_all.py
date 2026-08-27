@@ -670,5 +670,71 @@ check("stub: defaults to production, not localhost",
 check("stub: says why nothing was picked instead of going silent",
       "had no odds yet" in _stub)
 
+# ------------------------------------------- endzone edge agent (task 2)
+# The owner's real model, ported from ~/projects/endzone-edge (its own
+# invariant 6 forbids merging the repos; submitting as an agent is the one
+# sanctioned link). The port is only worth anything if it reproduces the
+# reference harness, so these pin the method, not a vibe.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("endzone_agent",
+                                     _root / "systems" / "endzone_agent.py")
+_ez = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_ez)
+
+check("endzone: weights are the frozen 2024 fit",
+      _ez.W_OFF == 0.70 and _ez.HFA == 0.4)
+check("endzone: skips the unstable opening weeks", _ez.MIN_WEEK == 5)
+check("endzone: tests on the untouched season", _ez.TEST_SEASON == 2025)
+
+# z-score: a league where everyone is identical has no signal, and must not
+# blow up on a zero standard deviation.
+_flat = _ez.zscorer([7.0, 7.0, 7.0])
+check("endzone: a flat league z-scores to zero", _flat(7.0) == 0.0)
+
+# ratings: better offence and better defence both raise a rating.
+_g = [{"home": "AAA", "away": "BBB", "hs": 30, "as": 10},
+      {"home": "CCC", "away": "AAA", "hs": 14, "as": 21},
+      {"home": "BBB", "away": "CCC", "hs": 13, "as": 17}]
+_r = _ez.ratings_through(_g)
+check("endzone: rates every team that has played", set(_r) == {"AAA", "BBB", "CCC"})
+check("endzone: the team outscoring everyone rates highest",
+      _r["AAA"] == max(_r.values()))
+check("endzone: the team being outscored rates lowest",
+      _r["BBB"] == min(_r.values()))
+
+# home-field advantage must actually tilt a coin-flip matchup home.
+_even = {"AAA": 0.0, "BBB": 0.0}
+check("endzone: HFA breaks a tie toward the home side",
+      _ez.predict(_even, "AAA", "BBB")[0] == "AAA")
+check("endzone: a big enough gap beats HFA",
+      _ez.predict({"AAA": 0.0, "BBB": 9.0}, "AAA", "BBB")[0] == "BBB")
+check("endzone: an unrated team yields no pick",
+      _ez.predict({"AAA": 1.0}, "AAA", "ZZZ") is None)
+
+# no-lookahead: ratings come only from the games handed in, and the runner
+# hands in strictly-earlier weeks. Feeding a later result must not change
+# an earlier week's rating.
+_early = _ez.ratings_through(_g)
+_late = _ez.ratings_through(_g + [{"home": "BBB", "away": "AAA",
+                                   "hs": 60, "as": 0}])
+check("endzone: later results cannot change an earlier week's ratings",
+      _early != _late and _ez.ratings_through(_g) == _early)
+
+# as_of must sit before kickoff, or the pick is priced off the close.
+_ao = _ez.as_of_for("2025-09-14T17:00:00")
+check("endzone: as_of is 24h before kickoff", _ao == "2025-09-13T17:00:00")
+
+_src = (_root / "systems" / "endzone_agent.py").read_text()
+check("endzone: picks moneyline, the market it actually predicts",
+      '"market": "moneyline"' in _src)
+check("endzone: does not submit spread picks (no ATS edge found)",
+      '"market": "spread"' not in _src)
+check("endzone: flat staking, since the model has no sizing signal",
+      '"stake_units": 1.0' in _src)
+check("endzone: writing is opt-in, never the default",
+      '"--submit"' in _src and '"--dry-run"' in _src)
+check("endzone: records that the market still beats it",
+      "63.0%" in _src and "59.6%" in _src)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
