@@ -235,14 +235,14 @@ def dry_run(api):
     return picks
 
 
-def submit(api, picks):
+def submit(api, picks, name=AGENT_NAME):
     code, reg = api.post("/agents/register",
-                         json={"name": AGENT_NAME, "kind": "bot"})
+                         json={"name": name, "kind": "bot"})
     if code != 200:
         print(f"register failed [{code}]: {reg}")
         return
     key, aid = reg["api_key"], reg["agent_id"]
-    print(f"registered {AGENT_NAME} as agent {aid}")
+    print(f"registered {name} as agent {aid}")
 
     sent = 0
     for p in picks:
@@ -264,7 +264,7 @@ def submit(api, picks):
               f"report will fill in once they are graded")
     rep = api.get(f"/agents/{aid}/report", mode="backtest")
     o = rep["overall"]
-    print(f"\nREPORT CARD — {AGENT_NAME} (backtest {TEST_SEASON})")
+    print(f"\nREPORT CARD — {name} (backtest {TEST_SEASON})")
     print(f"  {o['wins']}-{o['losses']}-{o['pushes']} over {o['picks']} picks")
     print(f"  ROI {o['roi_pct']}%   avg CLV (prob) {o['avg_clv_prob']}")
     print("\n" + rep.get("caution", ""))
@@ -278,6 +278,9 @@ def main():
     g.add_argument("--submit", action="store_true",
                    help="register the agent and POST the picks (permanent)")
     ap.add_argument("--url", help="deployment to run against; omit for in-process")
+    ap.add_argument("--name", default=AGENT_NAME,
+                    help="agent name to register; bump it rather than "
+                         "reusing one, since a graded record is never deleted")
     a = ap.parse_args()
 
     api = Remote(a.url) if a.url else Local()
@@ -291,7 +294,7 @@ def main():
             print("nothing to submit")
             return
         print(f"\nSubmitting {len(picks)} immutable backtest picks…")
-        submit(api, picks)
+        submit(api, picks, a.name)
 
 
 if __name__ == "__main__":

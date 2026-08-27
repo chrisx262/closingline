@@ -270,7 +270,37 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   entries, but each card must show every team that entry has burned (a team
   is usable once), so that vertical space is the feature. A previous pass
   compacted them into a tab strip and was reverted — do not redo it.
-- 2026-08-26: **CLV IS STRUCTURALLY ZERO ON BACKTEST DATA — known limit.**
+- 2026-08-26 (later): **FIXED — real 2025 opening lines bought and applied.**
+  540 credits on The Odds API historical archive (18 weekly calls x 3 markets
+  x 10), Tuesday 12:00 ET each week to match scheduler.py's `tue-open` slot.
+  Quota 18,660 -> 18,120; owner cancels the $30 plan Sept 15. Raw JSON kept in
+  data/opening_lines/ so it never has to be re-bought; the 544 pre-existing
+  2025 snapshot rows are backed up in data/backups/ before any deletion.
+  loaders/opening_lines.py `apply` removed 272 synthetic rows (only those
+  byte-identical to the close AND exactly 120h before it — the signature
+  nflverse_loader leaves) and wrote 272 real ones. Movement is real:
+  moneyline moved on 98% of games (mean 59 cents), spread on 68% (mean 0.85).
+  GOTCHA: books post the WHOLE season months out, so one Tuesday call returns
+  all 272 games. Taking them all would price a January game off a September
+  line and call four months of information "CLV". _iter_snapshots() therefore
+  keeps only games kicking off within 7 days of the snapshot.
+  RESULT — the same 208 picks, resubmitted as endzone_edge_v2 (agent 3):
+    v1 priced at the close  ROI -10.18%  CLV 0.0
+    v2 priced at the open   ROI +15.44%  CLV +0.0054  beat_close 54.8%
+  Identical 124-84-0 record. The whole 25-point ROI gap is ENTRY PRICE, which
+  is the platform's thesis stated in one row. Do not read v2 as the model
+  being good: it still picks winners at 59.6% vs the market's 63.0%, so its
+  edge is TIMING, not selection.
+  KNOWN ARTIFACT: picks carry as_of = kickoff-24h but get priced from the
+  Tuesday snapshot, because that is the only one at-or-before that as_of in a
+  one-snapshot-per-week backfill. Betting Tuesday is legitimate here (the
+  model reads only prior-week games), but the label is looser than the trade.
+  Self-corrects live from Week 1, where Thu/Sat/Sun snapshots exist and
+  kickoff-24h really will price at Saturday. Left as-is rather than
+  resubmitting a v3: a graded record is never deleted, and the v1/v2 pair is
+  a better demonstration of CLV than a tidier board would be.
+
+- 2026-08-26: **CLV WAS STRUCTURALLY ZERO ON BACKTEST DATA — now fixed above.**
   The EndZone submission graded out with avg_clv_prob exactly 0.0 across 208
   picks and beat_close_pct 0.0. Not a bug in the agent or the CLV math:
   loaders/nflverse_loader.py writes the SAME odds dict twice per game (once
