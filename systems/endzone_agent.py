@@ -254,7 +254,14 @@ def submit(api, picks):
             print(f"  rejected {p['game_id']}: {resp}")
     print(f"submitted {sent}/{len(picks)} picks")
 
-    api.post("/admin/grade")
+    # Grading is admin-gated in prod (ADMIN_KEY). Without it the picks still
+    # land, they just sit ungraded until the next scheduled grade run.
+    import os
+    code, _ = api.post("/admin/grade",
+                       headers={"x-admin-key": os.environ.get("ADMIN_KEY", "")})
+    if code != 200:
+        print(f"  note: grade run returned {code} — picks are stored; the "
+              f"report will fill in once they are graded")
     rep = api.get(f"/agents/{aid}/report", mode="backtest")
     o = rep["overall"]
     print(f"\nREPORT CARD — {AGENT_NAME} (backtest {TEST_SEASON})")

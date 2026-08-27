@@ -112,7 +112,20 @@
        so a model defined BELOW it never gets its table created — the endpoint
        500'd with "no such table: job_runs". New models MUST go above that
        line. Would have failed identically on prod Postgres.
-- [ ] 2. Wire owner's real model in via examples/agent_stub.py
+- [x] 2. Wire owner's real model — DONE 2026-08-26. EndZone Edge ported into
+       systems/endzone_agent.py (ported, NOT imported: EndZone invariant 6
+       forbids merging the repos; agent submission is the sanctioned link,
+       their T7). Frozen 2024 fit W_OFF=0.70 HFA=0.4, never refit in the
+       runner. Dry run reproduced the reference harness EXACTLY — 59.6% on
+       208 graded 2025 picks, from OUR game data rather than nflverse CSV.
+       SUBMITTED to prod: agent_id 2, 208/208 moneyline picks, graded
+       124-84-0, ROI -10.18%. Now rank 1 on both /leaderboard?mode=backtest
+       and /leaderboard/moneyline?mode=backtest — the moneyline board's
+       first real rows. Honest read: avg_fair_winprob 0.6329 vs 59.6% actual,
+       i.e. it underperformed the market's own expectation of its picks;
+       Vegas favourites hit 63.0%. Published unspun per invariant 6.
+       Moneyline only — the 2026-08-10 research found no ATS edge, so spread
+       picks would fake a skill the backtest denies. 17 new checks (222).
 - [x] 3. Friend onboarding — DONE 2026-08-26: walked ONBOARDING.md verbatim
        against https://www.closinglinehq.com. Three blockers found and fixed:
        $URL was never defined, the example game_id 2026_W01_DAL_PHI does not
@@ -257,6 +270,22 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   entries, but each card must show every team that entry has burned (a team
   is usable once), so that vertical space is the feature. A previous pass
   compacted them into a tab strip and was reverted — do not redo it.
+- 2026-08-26: **CLV IS STRUCTURALLY ZERO ON BACKTEST DATA — known limit.**
+  The EndZone submission graded out with avg_clv_prob exactly 0.0 across 208
+  picks and beat_close_pct 0.0. Not a bug in the agent or the CLV math:
+  loaders/nflverse_loader.py writes the SAME odds dict twice per game (once
+  at kickoff-120h so agents picking days out find a price, once at kickoff as
+  the close) because nflverse games.csv carries only one line per game — the
+  close. No movement in the data means no CLV, by construction.
+  Consequences: (1) the backtest board ranks CLV-first per invariant 5, but
+  with CLV pinned at 0 it is effectively ROI-ranked; (2) a reader sees "0.0"
+  and may take it as *neutral* CLV rather than *unmeasurable*. LIVE CLV is
+  unaffected — the scheduler takes genuinely different snapshots in-season
+  (task 4), which is where the product's core claim actually gets exercised.
+  SUGGESTED (not done, needs owner): render backtest CLV as "n/a — no line
+  movement in historical data" instead of 0.0, or backfill real opening
+  lines (loaders/circa_historical.py notes the Odds API historical endpoint
+  needs a PAID plan, ~$30/20k credits).
 - 2026-08-25: survivor picks are now {t:team, w:week}, not bare team names.
   The old flat list had no week on it, so the tool could not tell that an
   entry had already picked this week — the owner hit this immediately by
