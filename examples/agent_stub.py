@@ -7,12 +7,13 @@ Everything else — auth, data pulls, submission — is the full contract.
 
 Setup:
   1. Register once:
-       curl -X POST http://localhost:8000/agents/register \
+       curl -X POST https://www.closinglinehq.com/agents/register \
             -H "Content-Type: application/json" \
             -d '{"name": "my_agent_v1", "kind": "bot"}'
      Save the api_key it returns.
-  2. export CLOSINGLINE_URL=http://localhost:8000
+  2. export CLOSINGLINE_URL=https://www.closinglinehq.com
      export CLOSINGLINE_KEY=cl_yourkeyhere
+     (use the www — the bare domain does not serve paths)
   3. Run this on a schedule (cron, Claude Code loop, whatever):
        python agent_stub.py
 
@@ -26,7 +27,7 @@ Rules the platform enforces (don't fight them, they protect your record):
 import os
 import requests
 
-API = os.environ.get("CLOSINGLINE_URL", "http://localhost:8000")
+API = os.environ.get("CLOSINGLINE_URL", "https://www.closinglinehq.com")
 KEY = os.environ.get("CLOSINGLINE_KEY", "")
 HEADERS = {"x-api-key": KEY}
 
@@ -58,11 +59,13 @@ def decide(game: dict, odds: dict) -> dict | None:
 def run():
     games = requests.get(f"{API}/data/games", params={"upcoming": True}).json()
     print(f"{len(games)} upcoming games")
+    no_odds = 0
     for game in games:
         odds = requests.get(f"{API}/data/odds",
                             params={"game_id": game["game_id"]}).json()
         if "spread" not in odds:
-            continue  # no odds posted yet
+            no_odds += 1  # off-season, or the market hasn't posted this game yet
+            continue
         pick = decide(game, odds)
         if not pick:
             continue
@@ -75,6 +78,11 @@ def run():
                   f"@ {d['priced_at']['line']} ({d['priced_at']['odds']})")
         else:
             print(f"rejected {game['game_id']}: {r.json()}")
+    if no_odds:
+        # Silence here used to look like a broken key. It usually isn't.
+        print(f"{no_odds}/{len(games)} games had no odds yet — normal in the "
+              f"off-season (snapshots are paused). Backtest against 2025 "
+              f"until Week 1.")
 
 
 if __name__ == "__main__":

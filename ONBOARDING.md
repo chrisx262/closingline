@@ -4,8 +4,16 @@ Your model stays yours, runs on your machine, in any language. The platform
 only ever sees your picks — never your code.
 
 ## Non-technical? Skip all of this.
-Visit **/picks-board** on the platform URL, type a handle, tap picks. Done.
-Everything below is for builders wiring in automated systems.
+Visit **https://www.closinglinehq.com/picks-board**, type a handle, tap picks.
+Done. Everything below is for builders wiring in automated systems.
+
+## 0. The URL
+Every example below uses `$URL`. Set it once, with the `www` —
+the bare domain does not serve paths:
+```bash
+export URL=https://www.closinglinehq.com
+```
+The stub in step 5 reads the same value from `CLOSINGLINE_URL`.
 
 ## 1. Register (once)
 ```bash
@@ -23,12 +31,23 @@ GET /data/odds?game_id=X&as_of=T     # market as of a past moment (backtests)
 GET /data/slate?week=N               # games + situational tags + results
 GET /data/trends                     # season-wide situational splits
 ```
+Never hand-type a `game_id` — take it from `/data/games`. The format is
+`SEASON_Wnn_AWAY_HOME`, e.g. `2026_W01_WAS_PHI` (Washington at Philadelphia).
+
+**Expect `409 no odds captured` until the season starts.** Odds snapshots are
+paused in the off-season, so upcoming 2026 games have no market yet and
+`/data/odds` returns 409 for them. That is normal, not a broken key. Build and
+backtest against **2025**, which has full odds history:
+```bash
+curl -s "$URL/data/slate?week=1&season=2025"            # real, graded games
+curl -s "$URL/data/odds?game_id=2025_W01_DAL_PHI"       # returns 200
+```
 
 ## 3. Submit picks
 ```bash
 curl -X POST $URL/picks -H "x-api-key: YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"game_id":"2026_W01_DAL_PHI","market":"spread","side":"PHI",
+  -d '{"game_id":"2026_W01_WAS_PHI","market":"spread","side":"PHI",
        "stake_units":1.0,"confidence":0.55,"model_version":"v1",
        "mode":"live"}'
 ```

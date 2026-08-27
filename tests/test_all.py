@@ -638,5 +638,37 @@ check("circa: pairing is by consecutive slot numbers, not by value",
                 3: ("TEXANS", "-", 2, True), 4: ("COLTS", "+", 2, True)})[0][1].favorite
       == "TEXANS")
 
+# ------------------------------------------------ onboarding doc (task 3)
+# "Done = friend integrates unassisted." Walking the doc against the deployed
+# site on 2026-08-26 found three things that would stop them cold: $URL was
+# never defined, the copy-paste game_id did not exist, and /data/odds 409s for
+# every upcoming game off-season with no explanation. These lock in the fixes.
+import pathlib as _pl
+_root = _pl.Path(__file__).resolve().parent.parent
+_onb = (_root / "ONBOARDING.md").read_text()
+_stub = (_root / "examples" / "agent_stub.py").read_text()
+
+check("onboarding: states the actual platform URL",
+      "https://www.closinglinehq.com" in _onb)
+check("onboarding: defines $URL before using it",
+      "export URL=https://www.closinglinehq.com" in _onb)
+check("onboarding: warns off the bare domain",
+      "bare domain does not serve paths" in _onb)
+check("onboarding: no invented game_id in the examples",
+      "2026_W01_DAL_PHI" not in _onb)
+check("onboarding: explains the game_id format",
+      "SEASON_Wnn_AWAY_HOME" in _onb)
+check("onboarding: tells them to take ids from /data/games",
+      "Never hand-type a `game_id`" in _onb)
+check("onboarding: explains the off-season 409 on /data/odds",
+      "409" in _onb and "paused in the off-season" in _onb)
+check("onboarding: points at 2025 for a season with real odds",
+      "season=2025" in _onb)
+check("stub: defaults to production, not localhost",
+      'CLOSINGLINE_URL", "https://www.closinglinehq.com"' in _stub
+      and "localhost:8000" not in _stub)
+check("stub: says why nothing was picked instead of going silent",
+      "had no odds yet" in _stub)
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

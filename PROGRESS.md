@@ -113,7 +113,14 @@
        500'd with "no such table: job_runs". New models MUST go above that
        line. Would have failed identically on prod Postgres.
 - [ ] 2. Wire owner's real model in via examples/agent_stub.py
-- [ ] 3. Friend onboarding verified against the deployed URL
+- [x] 3. Friend onboarding — DONE 2026-08-26: walked ONBOARDING.md verbatim
+       against https://www.closinglinehq.com. Three blockers found and fixed:
+       $URL was never defined, the example game_id 2026_W01_DAL_PHI does not
+       exist (DAL plays NYG, PHI plays WAS in 2026 W1), and /data/odds 409s
+       for every upcoming game because snapshots pause off-season — now
+       documented with a 2025 backtest path. agent_stub.py defaulted to
+       localhost; now defaults to prod and says why it picked nothing.
+       10 new checks pin the doc to reality (205 total).
 - [x] 4. Odds snapshot cron — DONE 2026-07-13: snapshot_odds() finished
        (32-team map, top-3-book consensus, 36h kickoff matching; live-
        verified: 75/75 events captured). scheduler.py runs the full cadence
