@@ -316,6 +316,29 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
   movement in historical data" instead of 0.0, or backfill real opening
   lines (loaders/circa_historical.py notes the Odds API historical endpoint
   needs a PAID plan, ~$30/20k credits).
+- 2026-08-31: reviewed SurvivorGrid/PoolCrunch (Mark's suggestion) and took
+  two things, both just formulas. (1) FUTURE VALUE is now their definition:
+  sum (wp - 0.5) over every remaining PRICED week the team is favoured, banded
+  1-5 stars. Ours only found a team's single best week ahead, which misses the
+  team favoured in eight straight weeks without ever standing out. The old
+  "bigger edge Wk X" flag stays alongside it — that one is actionable.
+  (2) systems/survivor_backtest.py, their Knockouts page rebuilt from our data.
+  We deliberately do NOT copy the entry-weighted part: it needs real pick
+  popularity, theirs comes from Yahoo/ESPN public pools, and that field is
+  nothing like Circa's — borrowing it would mislead rather than help.
+  WHAT IT SAYS ABOUT 2025, and it is sobering:
+    calibration overall -1.9pt (fine) BUT the 60-70% band returned 53.8%
+    against 64.9% predicted, -11.0pt over 78 picks. One season, small sample,
+    and the reason survival odds must never be shown to two decimals.
+    A greedy entry (best unused team weekly) DIED IN WEEK 5 on a 78.2%
+    favourite, LA vs SF. A 2000-entry field picking randomly from the top 3
+    each week: 32.6% wiped out in WEEK 3 alone on GB (79.1% favourite, lost
+    10-13 at CLE), median entry dead week 5, 0.6% survived the season.
+    Any simulated survival curve has to resemble that shape or it is wrong.
+  Only 1 tie all season — but a tie kills a Circa entry, so it is counted as
+  elimination throughout.
+  NOT TAKEN: their P% / EV. Real popularity is the one thing we cannot source
+  for Circa, so EV stays out rather than being built on a guess.
 - 2026-08-25: survivor picks are now {t:team, w:week}, not bare team names.
   The old flat list had no week on it, so the tool could not tell that an
   entry had already picked this week — the owner hit this immediately by
