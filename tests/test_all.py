@@ -736,5 +736,52 @@ check("endzone: writing is opt-in, never the default",
 check("endzone: records that the market still beats it",
       "63.0%" in _src and "59.6%" in _src)
 
+# ------------------------------------- survivor: future value + backtest
+# Two things borrowed from SurvivorGrid after reviewing it on 2026-08-30.
+# Their future-value definition is better than the one we had (ours only found
+# a team's single best week, which misses the team favoured in eight straight
+# weeks), and their Knockouts page is the right way to sanity-check a survival
+# curve: against a season that actually happened.
+check("survivor: future value sums every favoured week, not just the best",
+      "function futureValue(" in sv_t and "fv[p.team]=(fv[p.team]||0)+(p.wp-0.5)" in sv_t)
+check("survivor: future value ignores games the team is not favoured in",
+      "if(p.wp>0.5)fv[p.team]" in sv_t)
+check("survivor: future value only looks forward",
+      "if(w.week<=afterWeek)return;" in sv_t)
+check("survivor: future value is banded into stars", "function fvStars(" in sv_t)
+check("survivor: the board shows a future-value flag", 'class="flag fv"' in sv_t)
+
+_bt = _ilu.module_from_spec(
+    _ilu.spec_from_file_location("survivor_backtest",
+                                 _root / "systems" / "survivor_backtest.py"))
+_bt.__spec__.loader.exec_module(_bt)
+
+# a tiny season: the 90% favourite loses in week 2, so every entry that took it
+# must die there, and nobody can survive past the games available.
+_rows = [
+    {"week": 1, "team": "AAA", "opp": "BBB", "wp": 0.90, "home": True,
+     "won": True, "tie": False, "score": "3-30"},
+    {"week": 1, "team": "BBB", "opp": "AAA", "wp": 0.10, "home": False,
+     "won": False, "tie": False, "score": "3-30"},
+    {"week": 2, "team": "CCC", "opp": "DDD", "wp": 0.90, "home": True,
+     "won": False, "tie": False, "score": "24-20"},
+    {"week": 2, "team": "DDD", "opp": "CCC", "wp": 0.10, "home": False,
+     "won": True, "tie": False, "score": "24-20"},
+]
+_res = _bt.elimination_curve(_rows, entries=200, top_k=1, seed=1)
+check("backtest: a field survives a week its favourite won",
+      _res["alive_after"][1] == 200)
+check("backtest: a field is wiped out by an upset it all picked",
+      _res["alive_after"][2] == 0 and _res["survived"] == 0)
+check("backtest: the upset is attributed to the team that lost",
+      _res["killers"].get((2, "CCC")) == 200)
+check("backtest: seeded runs are reproducible",
+      _bt.elimination_curve(_rows, entries=200, top_k=1, seed=1)["survived"]
+      == _res["survived"])
+check("backtest: a tie counts as elimination, per Circa",
+      "Circa eliminates on a tie" in (_root / "systems" / "survivor_backtest.py").read_text())
+check("backtest: it does not claim to replicate entry-weighted knockouts",
+      "we do not have" in (_root / "systems" / "survivor_backtest.py").read_text())
+
 print(f"\n{'ALL PASS' if not FAILS else 'FAILURES: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

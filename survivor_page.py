@@ -158,6 +158,8 @@ h2 em{font-style:normal;color:var(--up)}
 .flag{font-weight:800;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;
   padding:.16rem .42rem;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
 .flag.save{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 45%,var(--line))}
+.flag.fv{color:var(--mid);border-color:color-mix(in srgb,var(--mid) 45%,var(--line));
+  letter-spacing:.02em}
 .flag.contra{color:var(--mid);border-color:color-mix(in srgb,var(--mid) 45%,var(--line))}
 .flag.used{color:var(--down);border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
 .flag.home{color:var(--up);border-color:color-mix(in srgb,var(--up) 45%,var(--line))}
@@ -641,6 +643,37 @@ function futureMap(){
   });});
   return m;
 }
+/* ---------- future value ----------
+   futureMap() above finds a team's single best week ahead, which misses the
+   team that is favoured in eight straight weeks without ever being a standout.
+   This is SurvivorGrid's definition instead: sum (wp - 0.5) over EVERY
+   remaining game the team is favoured in. Higher = more useful later = more
+   reason not to burn it now. Only counts weeks the market has actually priced,
+   so it grows as lines post. */
+function futureValue(afterWeek){
+  var fv={};
+  WEEKS.forEach(function(w){
+    if(w.week<=afterWeek)return;
+    weekTeams(w).forEach(function(p){
+      if(p.wp>0.5)fv[p.team]=(fv[p.team]||0)+(p.wp-0.5);
+    });
+  });
+  return fv;
+}
+/* 1-5 stars, spread linearly across the teams that have any future value */
+function fvStars(fv){
+  var vals=Object.keys(fv).map(function(t){return fv[t];});
+  if(!vals.length)return {};
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+  var span=(hi-lo)||1, out={};
+  Object.keys(fv).forEach(function(t){
+    out[t]=Math.max(1,Math.min(5,Math.ceil((fv[t]-lo)/span*5)||1));
+  });
+  return out;
+}
+function fvWeeksAhead(afterWeek){
+  return WEEKS.filter(function(w){return w.week>afterWeek;}).length;
+}
 function tier(wp){
   if(wp>=0.80)return['SAFE','w-safe'];
   if(wp>=0.70)return['SOLID','w-solid'];
@@ -669,6 +702,7 @@ function renderBoard(){
     document.getElementById('wsrc').textContent='';return;}
   var w=WEEKS[curIdx], teams=weekTeams(w), fut=futureMap(), pops=popEstimates(teams), act=active();
   var wkNo=w.week;
+  var FV=futureValue(w.week), STARS=fvStars(FV), FVW=fvWeeksAhead(w.week);
   document.getElementById('wtitle').textContent='Week '+w.week;
   var src=(w.games.find(function(g){return g.wp_source;})||{}).wp_source;
   document.getElementById('wsrc').textContent=src?('win prob from '+(src==='ml'?'market moneyline':'market spread')):'';
@@ -680,6 +714,10 @@ function renderBoard(){
     if(used)flags+='<span class="flag used">used · E'+act+'</span>';
     if(!used&&fv&&fv.week>w.week&&fv.wp-p.wp>=0.05)
       flags+='<span class="flag save">bigger edge Wk '+fv.week+' ('+Math.round(fv.wp*100)+'%) — consider saving</span>';
+    if(!used&&STARS[p.team]>=4&&FVW>0)
+      flags+='<span class="flag fv" title="favoured in '+FVW+' priced week'+(FVW===1?'':'s')+
+        ' ahead — total future value '+FV[p.team].toFixed(2)+', a top band. Using it now spends all of that.">'+
+        '★'.repeat(STARS[p.team])+'☆'.repeat(5-STARS[p.team])+' future value</span>';
     if(!used&&p.wp>=0.62&&pops[i]<=8)flags+='<span class="flag contra">lower-owned · leverage</span>';
     if(!used&&LEAN>0&&p.wp>=0.5)
       flags+=p.home?('<span class="flag home">home lean +'+(LEAN*100).toFixed(1)+'%</span>')
