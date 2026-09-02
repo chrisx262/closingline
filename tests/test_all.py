@@ -358,6 +358,26 @@ check("simulator page has no hype language",
 check("the helper links across to the simulator", '/survivor/sim' in sp.text)
 check("the simulator is no longer bolted to the helper",
       'id="simcards"' not in sp.text)
+# ---- best possible path (exact assignment, not simulation) ----
+check("the simulator carries a best-path panel",
+      'id="bestpath"' in simp.text and "hungarian" in simp.text)
+check("best path is compared against greedy computed the same exact way, "
+      "not against a Monte Carlo estimate", "function greedyPath(" in simp.text)
+check("best path warns it is not a script to follow",
+      "not a script to follow" in simp.text)
+
+# The assignment solver is the kind of code that stays plausible while being
+# wrong, so it is checked against brute force on random instances.
+import shutil, subprocess  # noqa: E402
+if shutil.which("node"):
+    _r = subprocess.run(["node", "tests/check_hungarian.js", "survivor_sim_page.py"],
+                        capture_output=True, text=True)
+    check("assignment solver matches brute force on random instances "
+          "(" + (_r.stdout.strip().splitlines() or ["no output"])[-1] + ")",
+          _r.returncode == 0)
+else:
+    print("SKIP  assignment solver brute-force check (node not installed)")
+
 check("you can pick without leaving the simulator page",
       'class="usebtn"' in simp.text and "useTeam(" in simp.text)
 check("both pages share one set of entries",

@@ -242,6 +242,24 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: BEST POSSIBLE PATH on /survivor/sim, at the owner's suggestion
+  ("can the simulator take the bigger edge wk X and project a winning entry
+  look ahead?"). Assigning 20 legs from 32 teams to maximise survival is an
+  assignment problem, not a simulation: maximising a product of win probs is
+  maximising the sum of their logs, so it is max-weight bipartite matching.
+  Hungarian, exact, ~1ms. On the real 2026 board the optimum survives 0.167% vs
+  greedy's 0.105% -- 1.6x -- and they differ on 12 of 20 legs, e.g. greedy burns
+  SF at 84% in week 2 while the optimum saves it for week 3 and takes TB at 68%.
+- 2026-09-01: the greedy comparison is computed EXACTLY (greedyPath), not
+  sampled. First cut compared exact-optimum against a 4000-season Monte Carlo
+  and printed the optimum as WORSE (0.17% vs 0.22%), which is impossible --
+  surviving all 20 legs happens ~2 times in 1000, so at any affordable sample
+  size the noise dwarfs the effect. Which teams greedy takes is deterministic,
+  so its true probability is just the product along that fixed sequence.
+- 2026-09-01: tests/check_hungarian.js brute-forces the solver against every
+  permutation on 300 random instances (including infeasible cells). Wired into
+  test_all.py, skipped with a printed SKIP if node is not installed. A matching
+  algorithm that is subtly wrong still returns plausible answers.
 - 2026-09-01: SURVIVOR SPLIT INTO TWO PAGES at the owner's call. /survivor is
   the weekly decision (board, portfolio, holiday panel, planner); /survivor/sim
   is the season simulator. Shared guts extracted to survivor_core.py (theme,

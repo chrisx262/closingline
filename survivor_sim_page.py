@@ -26,6 +26,24 @@ SURVIVOR_SIM_HTML = shell(
                  "options you have left. Decision support, not betting advice."),
     nav_active="/survivor/sim",
     head_extra="""<style>
+.bpwrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.85rem 1rem;box-shadow:var(--shadow);overflow-x:auto}
+.bphead{display:flex;flex-wrap:wrap;gap:1.4rem;padding-bottom:.7rem;margin-bottom:.5rem;
+  border-bottom:1px solid var(--line)}
+.bphead span{white-space:nowrap}
+.bphead i{display:block;color:var(--dim);font-size:.58rem;font-style:normal;font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase}
+.bphead b{font-size:1.15rem;font-weight:900}
+table.bp{border-collapse:collapse;width:100%;min-width:360px}
+table.bp th{text-align:left;font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);padding:.3rem .4rem;border-bottom:1px solid var(--line)}
+table.bp td{padding:.3rem .4rem;border-bottom:1px solid var(--line);font-size:.74rem;
+  font-weight:700}
+table.bp td.n{text-align:right;font-variant-numeric:tabular-nums}
+table.bp td.bl{color:var(--dim);white-space:nowrap}
+table.bp tr.hol td.bl{color:var(--down);font-weight:900}
+table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem}
+table.bp td.gd .same{color:var(--dim);font-weight:700}
 .usebtn{font:inherit;font-weight:800;font-size:.62rem;padding:.22rem .6rem;
   border-radius:999px;border:1px solid var(--line);background:var(--panel);
   color:var(--ink);cursor:pointer;white-space:nowrap}
@@ -79,6 +97,17 @@ SURVIVOR_SIM_HTML = shell(
   that do are the decision.</p>
   <div id="simcompare"></div>
   <div id="simhold"></div>
+</section>
+
+<section>
+  <h2>Best possible <em>path</em></h2>
+  <p class="subnote">The single best way to spend your remaining teams across every leg,
+  solved exactly rather than simulated &mdash; the simulator's greedy rule takes the best
+  team available each week, which can burn a team that was the only good option in
+  November. <b>This is not a script to follow.</b> Over half these legs are still
+  estimates and one injury voids any fixed plan. Read it for the one thing a single week
+  cannot tell you: which week the schedule actually wants each team for.</p>
+  <div id="bestpath"></div>
 </section>
 
 <section>
@@ -521,7 +550,163 @@ function renderSim(){
 }
 
 
-function renderAll(){renderEntries();renderLegTitle();renderSim();}
+function renderAll(){renderEntries();renderLegTitle();renderSim();renderBestPath();}
+/* ================= BEST POSSIBLE PATH =================
+   The simulator's policy is greedy: each leg it takes the best team still legal
+   to it, minus whatever is being held for a holiday. Greedy is not optimal and
+   is not close to it. Spending a 78% team in week 3 can cost you the only team
+   that was any good in week 14, and no amount of looking one leg ahead sees it.
+
+   Assigning 20 legs from 32 teams, each team used at most once, maximising the
+   chance of surviving all of them, is an assignment problem. Maximising a
+   product of win probabilities is the same as maximising the sum of their logs,
+   so it is a plain max-weight bipartite matching and the Hungarian algorithm
+   solves it exactly in well under a millisecond at this size. No simulation
+   required -- and no simulation could match it, because sampling cannot search
+   a space this shape.
+
+   READ THIS FOR WHAT IT IS. It is the best path THROUGH TODAY'S NUMBERS, and
+   more than half of those numbers are estimates for weeks nobody has priced.
+   It is not a script to follow -- a quarterback injury in November voids any
+   fixed 20-week plan, which is the whole reason the tool's real output is a
+   hold-back list re-run weekly. What it IS good for is the question you cannot
+   answer by staring at one week: which weeks does the schedule actually want
+   each team for. If the optimum spends Buffalo in week 11, that is a real
+   argument against spending Buffalo in week 3, and greedy will never tell you.
+*/
+var BIG=1000;   /* stands in for "this team does not play this leg" */
+
+function hungarian(cost,n,m){
+  /* Standard O(n^3) Kuhn-Munkres with potentials. Rows are legs, columns are
+     teams, n <= m. Returns assign[i] = column matched to row i, 1-indexed. */
+  var INF=Infinity;
+  var u=new Array(n+1).fill(0), v=new Array(m+1).fill(0);
+  var p=new Array(m+1).fill(0), way=new Array(m+1).fill(0);
+  for(var i=1;i<=n;i++){
+    p[0]=i;
+    var j0=0;
+    var minv=new Array(m+1).fill(INF), used=new Array(m+1).fill(false);
+    do{
+      used[j0]=true;
+      var i0=p[j0], delta=INF, j1=-1;
+      for(var j=1;j<=m;j++){
+        if(used[j])continue;
+        var cur=cost[i0][j]-u[i0]-v[j];
+        if(cur<minv[j]){minv[j]=cur;way[j]=j0;}
+        if(minv[j]<delta){delta=minv[j];j1=j;}
+      }
+      for(var j2=0;j2<=m;j2++){
+        if(used[j2]){u[p[j2]]+=delta;v[j2]-=delta;}
+        else minv[j2]-=delta;
+      }
+      j0=j1;
+    }while(p[j0]!==0);
+    do{var j3=way[j0];p[j0]=p[j3];j0=j3;}while(j0);
+  }
+  var assign=new Array(n+1).fill(0);
+  for(var j4=1;j4<=m;j4++)if(p[j4])assign[p[j4]]=j4;
+  return assign;
+}
+
+/* Best assignment of remaining teams to remaining legs for ONE entry. */
+function bestPath(legs,usedList){
+  var used={};(usedList||[]).forEach(function(t){used[t]=1;});
+  /* every team that could still be played somewhere ahead */
+  var teams=[],seen={};
+  legs.forEach(function(L){L.teams.forEach(function(p){
+    if(used[p.team]||seen[p.team])return;seen[p.team]=1;teams.push(p.team);});});
+  var n=legs.length,m=teams.length;
+  if(!n||m<n)return null;         /* cannot field a legal team for every leg */
+  var idx={};teams.forEach(function(t,k){idx[t]=k+1;});
+  var cost=[];
+  for(var i=0;i<=n;i++){cost.push(new Array(m+1).fill(BIG));}
+  legs.forEach(function(L,i){
+    L.teams.forEach(function(p){
+      var j=idx[p.team];
+      if(!j)return;
+      var wp=Math.min(0.999,Math.max(0.001,p.wp));
+      cost[i+1][j]=-Math.log(wp);
+    });
+  });
+  var assign=hungarian(cost,n,m);
+  var out=[],logsum=0,ok=true;
+  for(var i2=1;i2<=n;i2++){
+    var j=assign[i2],L=legs[i2-1];
+    if(!j||cost[i2][j]>=BIG){out.push({leg:L,team:null,wp:null});ok=false;continue;}
+    var team=teams[j-1],pick=null;
+    L.teams.forEach(function(p){if(p.team===team)pick=p;});
+    logsum+=cost[i2][j];
+    out.push({leg:L,team:team,wp:pick?pick.wp:null,opp:pick?pick.opp:null,
+              home:pick?pick.home:false});
+  }
+  return {rows:out,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,n):0,feasible:ok};
+}
+
+/* The greedy policy's path, worked out exactly rather than sampled.
+   Which teams greedy takes is deterministic -- the randomness in the simulator
+   only decides WHEN it dies, not what it would have picked. So its true
+   survival probability is just the product along that fixed sequence, and
+   comparing it to the optimum is then exact-against-exact. Comparing against a
+   Monte Carlo estimate is useless here: surviving all twenty legs happens about
+   twice in a thousand seasons, so at any sample size we can afford the noise is
+   larger than the effect. */
+function greedyPath(legs,usedList){
+  var u={};(usedList||[]).forEach(function(t){u[t]=1;});
+  var res=RESERVE?reservationsFor(legs,u):{};
+  var rows=[],logsum=0,ok=true;
+  for(var i=0;i<legs.length;i++){
+    var L=legs[i],pick=null,j,p;
+    for(j=0;j<L.teams.length;j++){
+      p=L.teams[j];
+      if(u[p.team])continue;
+      if(res[p.team]&&res[p.team]!==L.id)continue;
+      pick=p;break;
+    }
+    if(!pick){for(j=0;j<L.teams.length;j++){p=L.teams[j];if(!u[p.team]){pick=p;break;}}}
+    if(!pick){rows.push({leg:L,team:null,wp:null});ok=false;continue;}
+    u[pick.team]=1;
+    logsum+=-Math.log(Math.min(0.999,Math.max(0.001,pick.wp)));
+    rows.push({leg:L,team:pick.team,wp:pick.wp,opp:pick.opp,home:pick.home});
+  }
+  return {rows:rows,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,legs.length):0,
+          feasible:ok};
+}
+
+function renderBestPath(){
+  var el=document.getElementById('bestpath');
+  if(!el)return;
+  if(!WEEKS.length||!aliveIds().length){el.innerHTML='';return;}
+  var legs=buildLegs(),act=active();
+  var bp=bestPath(legs,usedBy(act));
+  if(!bp){el.innerHTML='<div class="empty">Not enough unused teams left to fill every '+
+    'remaining leg &mdash; this entry cannot legally finish the season.</div>';return;}
+  /* exact against exact -- see greedyPath */
+  var gp=greedyPath(legs,usedBy(act));
+  var gs=gp?gp.survive:0;
+  var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r.team;});
+  var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
+  var h='<div class="bpwrap"><div class="bphead">'+
+    '<span><i>best path survives all '+legs.length+'</i><b>'+pc(bp.survive)+'</b></span>'+
+    '<span><i>greedy policy manages</i><b>'+pc(gs)+'</b></span>'+
+    '<span><i>legs still estimated</i><b>'+est+' of '+legs.length+'</b></span></div>';
+  h+='<table class="bp"><tr><th>Leg</th><th>Take</th><th>Win%</th>'+
+     '<th>Greedy would take</th></tr>';
+  bp.rows.forEach(function(r,i){
+    var hl=r.team?holidayLegsFor(r.team):[];
+    h+='<tr class="'+(r.leg.hol>=0?'hol':'')+'"><td class="bl">'+r.leg.label+
+       (r.leg.mkt<0.5?' <i class="estdot">est</i>':'')+'</td><td>'+
+       (r.team?('<span class="tchip" style="background:'+tcol(r.team)+
+         ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+r.team+'</span> '+
+         (r.home?'vs ':'at ')+r.opp+
+         (hl.length>1?' <span class="dbl" title="plays both holiday legs">&#9733;</span>':''))
+        :'<span style="color:var(--down)">no legal team</span>')+
+       '</td><td class="n">'+(r.wp==null?'&mdash;':Math.round(r.wp*100)+'%')+'</td>'+
+       '<td class="gd">'+((gmap[i]&&gmap[i]!==r.team)?gmap[i]:'<span class="same">same</span>')+
+       '</td></tr>';
+  });
+  el.innerHTML=h+'</table></div>';
+}
+
 
 /* The leg you are deciding, mirrored from the shared week cursor. */
 function renderLegTitle(){
