@@ -52,9 +52,12 @@ def load(seasons: list[int], wipe: bool = False):
     s = SessionLocal()
     loaded = skipped = 0
     for row in rows:
-        if not row.get("spread_line") or not row.get("total_line"):
+        # A future game usually has no line yet. Load the schedule row anyway
+        # -- the survivor planner needs every week's matchups to reserve teams
+        # for the holiday legs -- and just don't build a snapshot for it.
+        has_lines = bool(row.get("spread_line") and row.get("total_line"))
+        if not has_lines:
             skipped += 1
-            continue
 
         gameday = row["gameday"]
         gametime = row.get("gametime") or "13:00"
@@ -85,7 +88,8 @@ def load(seasons: list[int], wipe: bool = False):
         # our convention:      spread_home_line negative = home favored
         # Only create the initial snapshot pair; once a game has snapshots,
         # the in-season odds cron owns updates (no duplicates on rerun).
-        if s.query(OddsSnapshot).filter(OddsSnapshot.game_id == gid).count():
+        if not has_lines or s.query(OddsSnapshot).filter(
+                OddsSnapshot.game_id == gid).count():
             loaded += 1
             continue
         home_line = -float(row["spread_line"])
@@ -109,9 +113,13 @@ def load(seasons: list[int], wipe: bool = False):
     s.commit()
     s.close()
     print(f"loaded {loaded} games across seasons {seasons} "
-          f"({skipped} skipped, no lines)")
+          f"({skipped} with no line yet: schedule row only)")
 
 
 if __name__ == "__main__":
-    seasons = [int(a) for a in sys.argv[1:]] or [2025]
-    load(seasons, wipe=True)
+    args = sys.argv[1:]
+    wipe = "--wipe" in args
+    seasons = [int(a) for a in args if not a.startswith("-")] or [2025]
+    if wipe:
+        print("!! --wipe drops every table in the target database !!")
+    load(seasons, wipe=wipe)
