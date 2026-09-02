@@ -1274,6 +1274,15 @@ def moneyline_page():
     return MONEYLINE_HTML
 
 
+@app.get("/survivor/sim", response_class=HTMLResponse)
+def survivor_sim():
+    """The season simulator. Its own page since 2026-09-01 -- on the helper it
+    sat below thirty rows of board, so you could not see a number move while
+    you were moving it."""
+    from survivor_sim_page import SURVIVOR_SIM_HTML
+    return SURVIVOR_SIM_HTML
+
+
 @app.get("/survivor", response_class=HTMLResponse)
 def survivor_helper():
     from survivor_page import SURVIVOR_HTML

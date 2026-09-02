@@ -347,54 +347,69 @@ check("survivor page carries the RG footer", "1-800-GAMBLER" in sp.text)
 check("survivor page has no hype language",
       not any(w in sp.text.lower() for w in ("guaranteed", "can't-miss", "lock of")))
 
-# ---- scenario simulator ----
-check("survivor page carries the scenario simulator",
-      "SCENARIO SIMULATOR" in sp.text and 'id="simcards"' in sp.text)
+# ---- scenario simulator: its own page since 2026-09-01 ----
+simp = c.get("/survivor/sim")
+check("simulator page 200", simp.status_code == 200)
+check("simulator page carries the RG footer", "1-800-GAMBLER" in simp.text)
+check("simulator page has no hype language",
+      not any(w in simp.text.lower() for w in ("guaranteed", "can't-miss", "lock of")))
+# The helper must hand you across, and the simulator must be pickable on its own
+# -- a plan page you cannot pick from would undo the reason it was split out.
+check("the helper links across to the simulator", '/survivor/sim' in sp.text)
+check("the simulator is no longer bolted to the helper",
+      'id="simcards"' not in sp.text)
+check("you can pick without leaving the simulator page",
+      'class="usebtn"' in simp.text and "useTeam(" in simp.text)
+check("both pages share one set of entries",
+      "survivor_entries_v1" in sp.text and "survivor_entries_v1" in simp.text)
+check("simulator page carries the simulator",
+      "SCENARIO SIMULATOR" in simp.text and 'id="simcards"' in simp.text)
 check("simulator sees the whole remaining season, not an 8-week window",
-      "/data/survivor?weeks=18" in sp.text)
+      "/data/survivor?weeks=18" in simp.text)
 check("simulator counts a tie as elimination, like Circa",
-      "TIE_RATE" in sp.text)
+      "TIE_RATE" in simp.text)
 check("simulator is seeded, so a number only moves when the board does",
-      "mulberry32" in sp.text)
+      "mulberry32" in simp.text)
 check("simulator warns the percentages are not forecasts",
-      "ranking of your options" in sp.text)
+      "ranking of your options" in simp.text)
 check("simulator shows the active entry on its own, not just the portfolio",
-      'id="simentry"' in sp.text and "Across all " in sp.text)
+      'id="simentry"' in simp.text and "Across all " in simp.text)
 # '<1%' written straight into innerHTML is parsed as the start of a tag and
 # vanishes, blanking exactly the rarest numbers. Must be entity-escaped.
 check("small probabilities are HTML-escaped, not swallowed as a tag",
-      "&lt;1%" in sp.text and "return '<1%'" not in sp.text
-      and "return '>99%'" not in sp.text)
-check("simulate() can be restricted to one entry", "onlyId" in sp.text)
+      "&lt;1%" in simp.text and "return '<1%'" not in simp.text
+      and "return '>99%'" not in simp.text)
+check("simulate() can be restricted to one entry", "onlyId" in simp.text)
 check("a pinned live bar follows you down the long board",
-      'id="livebar"' in sp.text and "position:fixed" in sp.text)
+      'id="livebar"' in simp.text and "position:fixed" in simp.text)
 check("picking on an entry makes that entry the one on screen",
-      "LASTPICK={t:team,n:String(n)}" in sp.text)
+      "LASTPICK={t:team,n:String(n)}" in simp.text)
 # A pick that costs nothing is the common case; saying nothing about it is
 # indistinguishable from the tool being broken, which is how this was found.
 check("the bar states the cost of a pick even when it is zero",
-      "costs you nothing at either holiday leg" in sp.text)
+      "costs you nothing at either holiday leg" in simp.text)
 check("pick cost is measured by re-running without that pick, not by diffing "
-      "whatever was last on screen", "omitTeam" in sp.text)
+      "whatever was last on screen", "omitTeam" in simp.text)
 # Holding ONE team per leg means burning a worse holiday team is free by the
 # policy's own arithmetic. That is only true if the held team's number never
 # moves, and it is a week-16 line. Depth in the pool must be counted and shown.
 check("holiday-pool depth is counted, not just the single best team",
-      "legDepth" in sp.text and "options left" in sp.text)
+      "legDepth" in simp.text and "options left" in simp.text)
 check("spending a holiday team is never reported as simply free",
-      "but it was a holiday team" in sp.text)
+      "but it was a holiday team" in simp.text)
 # A market line prices today's injuries; a prior is fitted to lines posted
 # before the news and cannot. The two must be distinguishable on screen.
 check("legs say whether they are a real line or an estimate",
-      "priced by estimate" in sp.text and "estdot" in sp.text)
-check("the holiday numbers name their own source", "legsrc" in sp.text)
+      "priced by estimate" in simp.text and "estdot" in simp.text)
+check("the holiday numbers name their own source", "legsrc" in simp.text)
 # Future value (SurvivorGrid's formula) now spans estimated weeks too, which
 # moved 10 of 31 teams' star ratings. The flag must declare that mix rather
 # than implying every star rests on a real line.
+# The future-value flag is on the board, which stayed on the helper page.
 check("future value declares how much of it is estimated",
       "still estimated, so treat the star count as a rough sort" in sp.text)
 check("weeks-ahead count is split into market vs estimated",
-      "return {total:n,market:mkt,est:n-mkt}" in sp.text)
+      "return {total:n,market:mkt,est:n-mkt}" in simp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it

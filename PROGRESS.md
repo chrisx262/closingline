@@ -242,6 +242,20 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: SURVIVOR SPLIT INTO TWO PAGES at the owner's call. /survivor is
+  the weekly decision (board, portfolio, holiday panel, planner); /survivor/sim
+  is the season simulator. Shared guts extracted to survivor_core.py (theme,
+  team colours, HOLIDAY_LEGS, entry state + elimination, the /data/survivor
+  feed, weekTeams/futureValue/tier, and a shell() that builds both pages so the
+  chrome and the RG footer cannot drift apart). CONTRACT: core calls renderAll()
+  only; each page defines renderAll() over the panels it actually has. Core may
+  never name a page-specific renderer -- that coupling is what made the split
+  hard. Entries live in the same localStorage keys, so a pick on either page
+  shows on the other.
+- 2026-09-01: the simulator page is SELF-CONTAINED for picking -- the comparison
+  table carries its own Use buttons. A planning page you cannot pick from would
+  undo the reason for splitting it out, which was the owner not being able to
+  watch a number move while causing it to move.
 - 2026-09-01: FUTURE VALUE (SurvivorGrid's formula, taken 2026-08-31) silently
   changed meaning when priors landed today. It sums (wp-0.5) over remaining
   weeks a team is favoured; it used to see only market-priced weeks because
