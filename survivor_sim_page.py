@@ -933,7 +933,8 @@ function renderBestPath(){
     '<span><i>greedy policy manages</i><b>'+pc(gs)+'</b></span>'+
     '<span><i>legs still estimated</i><b>'+est+' of '+legs.length+'</b></span></div>';
   h+='<table class="bp"><tr><th>Leg</th><th>Take</th><th>Win%</th>'+
-     '<th>Greedy would take</th></tr>';
+     '<th title="what the simple best-team-available rule would spend on this leg">'+
+     'Greedy would take</th></tr>';
   bp.rows.forEach(function(r,i){
     var hl=r.team?holidayLegsFor(r.team):[];
     h+='<tr class="'+(r.leg.hol>=0?'hol':'')+'"><td class="bl">'+r.leg.label+
@@ -944,7 +945,14 @@ function renderBestPath(){
          (hl.length>1?' <span class="dbl" title="plays both holiday legs">&#9733;</span>':''))
         :'<span style="color:var(--down)">no legal team</span>')+
        '</td><td class="n">'+(r.wp==null?'&mdash;':Math.round(r.wp*100)+'%')+'</td>'+
-       '<td class="gd">'+((gmap[i]&&gmap[i]!==r.team)?gmap[i]:'<span class="same">same</span>')+
+       /* Rendered as a chip like every other team on this page. As bare text
+          "NO" reads as the word no, not New Orleans -- which is exactly how the
+          owner read it. */
+       '<td class="gd">'+((gmap[i]&&gmap[i]!==r.team)
+         ?('<span class="tchip" style="background:'+tcol(gmap[i])+
+           ';min-width:2.2rem;height:1.3rem;font-size:.62rem" title="the greedy rule '+
+           'would spend '+gmap[i]+' here">'+gmap[i]+'</span>')
+         :'<span class="same">same</span>')+
        '</td></tr>';
   });
   el.innerHTML=h+'</table></div>';

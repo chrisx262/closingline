@@ -399,6 +399,10 @@ check("you can pin the opening team and re-solve from there",
       "function setBpStart(" in simp.text and "forceFirst" in simp.text)
 check("opening options are ranked by where the season ends up, not by this week",
       "ranked by where the " in simp.text)
+# Bare "NO" reads as the word no rather than New Orleans, which is how the
+# owner read it. Every team on this page is a coloured chip.
+check("the greedy column shows teams as chips, not bare text",
+      'class="gd">' in simp.text and "reads as the word no" in simp.text)
 check("best path warns it is not a script to follow",
       "not a script to follow" in simp.text)
 
