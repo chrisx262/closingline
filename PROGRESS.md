@@ -242,6 +242,13 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: DEPLOYED and verified live. All six routes 200 including the new
+  /survivor/sim; /data/survivor serves 272 games over 18 weeks (114 market lines,
+  158 estimates) with the as_of field. Ran the deployed simulator against prod
+  data: 20 legs, best path 0.179% vs greedy 0.094%, ten diversified entries reach
+  Thanksgiving 16% against 6% for ten clones, 200-cell portfolio grid, no console
+  errors. as_of is null until the odds cron takes its first in-season capture
+  (it skips off-season; season opens Sept 10) and the page says so.
 - 2026-09-02: PRIORS NOW FIT ON GAMES NOT YET PLAYED, not the whole season.
   Owner's point: teams over- and under-perform preseason expectations every
   year, so a September line is a stale opinion by December. Confirmed on 2025 --
