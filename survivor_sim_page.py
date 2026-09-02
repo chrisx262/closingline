@@ -53,6 +53,15 @@ table.bp td.gd .same{color:var(--dim);font-weight:700}
 table.bp.pp td.pc{text-align:center;padding:.22rem .25rem}
 table.bp.pp th.me,table.bp.pp td.me{background:color-mix(in srgb,var(--save) 14%,transparent)}
 table.bp.pp th{text-align:center}
+.ladlab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;margin:.2rem 0 .4rem}
+.ladder{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
+.rung{display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--line);
+  border-radius:8px;padding:.25rem .5rem;font-size:.7rem}
+.rung.top{border-color:color-mix(in srgb,var(--save) 55%,var(--line));
+  background:color-mix(in srgb,var(--save) 10%,transparent)}
+.rung b{font-weight:900;font-variant-numeric:tabular-nums}
+.rung i{font-style:normal;color:var(--dim);font-size:.6rem;font-weight:700}
 .bpstart{margin-bottom:.9rem}
 .bpslab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;margin-bottom:.35rem}
@@ -124,6 +133,16 @@ table.bp .delta.dn{color:var(--down);font-weight:800}
   estimates and one injury voids any fixed plan. Read it for the one thing a single week
   cannot tell you: which week the schedule actually wants each team for.</p>
   <div id="bestpath"></div>
+</section>
+
+<section>
+  <h2>If something <em>goes wrong</em></h2>
+  <p class="subnote">We do not predict injuries &mdash; the market prices them faster and
+  better than we could, and every posted line already includes today's news. What can be
+  known now is how much the plan leans on any one team. A leg whose second-best option is
+  a point behind needs no plan B; one whose second option is ten points back is a single
+  injury away from being why you lose.</p>
+  <div id="contingency"></div>
 </section>
 
 <section>
@@ -586,7 +605,92 @@ function renderSim(){
 }
 
 
-function renderAll(){renderEntries();renderLegTitle();renderSim();renderBestPath();renderPortfolio2();}
+function renderAll(){renderEntries();renderLegTitle();renderSim();renderBestPath();renderContingency();renderPortfolio2();}
+/* ================= CONTINGENCY =================
+   "What happens if the team I am holding gets hurt" is the question the rest of
+   this page cannot answer, because every number on it assumes today's prices
+   hold. It answers it the only honest way available: by removing a team and
+   re-solving. That is not a forecast of injuries -- we do not model those and
+   the market prices them better than we could -- it is a measure of how much
+   the plan leans on any one team, which is knowable today.
+
+   The useful output is the SHAPE. A leg whose second option is a point behind
+   the first needs no contingency. A leg whose second option is ten points back
+   is a single injury away from being the reason you lose. */
+function renderContingency(){
+  var el=document.getElementById('contingency');
+  if(!el)return;
+  if(!WEEKS.length||!aliveIds().length){el.innerHTML='';return;}
+  var legs=buildLegs(),act=active(),used=usedBy(act);
+  var settled=settledFor(act,legs);
+  var iT=legIdx(legs,'H0'), iX=legIdx(legs,'H1');
+  if(iT<0&&iX<0){el.innerHTML='<div class="empty">Both holiday legs are behind you.</div>';return;}
+  var base=bestPath(legs,used,null,null,null,settled);
+  if(!base){el.innerHTML='';return;}
+
+  var h='<div class="bpwrap">';
+  /* the ladder at each leg */
+  [[iT,'&#127860; Thanksgiving'],[iX,'&#127876; Christmas']].forEach(function(pair){
+    var li=pair[0];
+    if(li<0)return;
+    var L=legs[li];
+    var open=L.teams.filter(function(p){return used.indexOf(p.team)<0;})
+                    .sort(function(a,b){return b.wp-a.wp;});
+    if(!open.length){h+='<div class="ladlab">'+pair[1]+' &mdash; nothing left</div>';return;}
+    var best=open[0].wp;
+    h+='<div class="ladlab">'+pair[1]+' &mdash; '+open.length+' option'+
+       (open.length===1?'':'s')+' left, best first</div><div class="ladder">';
+    open.slice(0,6).forEach(function(p,i){
+      var gap=Math.round((p.wp-best)*100);
+      h+='<span class="rung'+(i===0?' top':'')+'">'+
+        '<span class="tchip" style="background:'+tcol(p.team)+
+        ';min-width:2.1rem;height:1.2rem;font-size:.58rem">'+p.team+'</span>'+
+        '<b>'+Math.round(p.wp*100)+'%</b>'+
+        (i===0?'<i>the one you would field</i>':'<i>'+gap+' pts</i>')+'</span>';
+    });
+    h+='</div>';
+  });
+
+  /* how much the plan leans on any single team */
+  var cand={},list=[];
+  [iT,iX].forEach(function(li){
+    if(li<0)return;
+    legs[li].teams.forEach(function(p){
+      if(used.indexOf(p.team)>=0||cand[p.team])return;
+      cand[p.team]=1;list.push(p.team);});
+  });
+  var rows=[];
+  list.forEach(function(t){
+    var r=bestPath(legs,used.concat([t]),null,null,null,settled);
+    if(!r||!r.feasible)return;
+    rows.push({team:t,s:r.survive,
+               t0:(iT>=0&&r.rows[iT])?r.rows[iT].wp:null,
+               x0:(iX>=0&&r.rows[iX])?r.rows[iX].wp:null});
+  });
+  rows.sort(function(a,b){return a.s-b.s;});
+  if(rows.length){
+    h+='<div class="ladlab" style="margin-top:.9rem">If you lose one of these &mdash; '+
+       'hurt, or you had to spend it &mdash; the season re-solves to this</div>';
+    h+='<table class="bp"><tr><th>Lose</th><th>Season survives</th>'+
+       '<th>&#127860; falls to</th><th>&#127876; falls to</th></tr>';
+    rows.slice(0,6).forEach(function(o){
+      var d=(o.s/base.survive-1)*100;
+      h+='<tr><td><span class="tchip" style="background:'+tcol(o.team)+
+        ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+o.team+'</span></td>'+
+        '<td class="gd">'+(o.s*100).toFixed(3)+'% <span class="gwp">'+
+        d.toFixed(0)+'%</span></td>'+
+        '<td class="gd">'+(o.t0==null?'&mdash;':Math.round(o.t0*100)+'%'+
+          (base.rows[iT]&&o.t0<base.rows[iT].wp?' <span class="gwp">was '+
+           Math.round(base.rows[iT].wp*100)+'%</span>':''))+'</td>'+
+        '<td class="gd">'+(o.x0==null?'&mdash;':Math.round(o.x0*100)+'%'+
+          (base.rows[iX]&&o.x0<base.rows[iX].wp?' <span class="gwp">was '+
+           Math.round(base.rows[iX].wp*100)+'%</span>':''))+'</td></tr>';
+    });
+    h+='</table>';
+  }
+  el.innerHTML=h+'</div>';
+}
+
 function renderPortfolio2(){
   var el=document.getElementById('portpaths');
   if(!el)return;

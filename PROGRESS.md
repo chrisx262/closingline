@@ -242,6 +242,22 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: CONTINGENCY panel on /survivor/sim. We still do not model
+  injuries -- the market prices them faster than we could and every posted line
+  already carries today's news. What IS knowable today is how much the plan
+  leans on one team, measured by removing that team and re-solving. Two blocks:
+  the fallback ladder at each holiday leg, and the cost of losing each holiday
+  team. KEY ASYMMETRY on the 2026 board: Thanksgiving is fragile (LA 68%, next
+  is BUF at 58% -- a ten-point cliff, losing LA costs 31% of the season), while
+  Christmas is robust (PHI 55%, BUF 55%, CHI 52%, LA 52% -- losing PHI costs
+  three points and 20%). So the contingency worth having is for Thanksgiving,
+  which is the opposite of where the attention has been all along.
+- 2026-09-02: HOW MANY TO HOLD, measured. Holding the top N of each leg until
+  that leg: N=0 0.167%, N=1 0.167%, N=2 0.167%, N=3 0.134%, N=4 0.117%. Holding
+  1-2 per leg is FREE; 3+ costs real value; all twelve costs 62%. And N=0 already
+  fields 68%/55% at the legs -- the assignment solver reserves LA and PHI on its
+  own without being told, because it optimises the whole season. The hold-back
+  rule is a crutch for the GREEDY weekly policy, not for the optimum.
 - 2026-09-02: third column on the best-path table, "Holiday teams held" -- the
   best path if no holiday-leg team may be spent before its own holiday leg
   (free from that leg onward; a both-legs team is therefore locked only until

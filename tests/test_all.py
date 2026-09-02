@@ -401,6 +401,12 @@ check("opening options are ranked by where the season ends up, not by this week"
       "ranked by where the " in simp.text)
 # Bare "NO" reads as the word no rather than New Orleans, which is how the
 # owner read it. Every team on this page is a coloured chip.
+# We do not predict injuries. What is knowable today is how much the plan leans
+# on any one team, measured by removing it and re-solving.
+check("a contingency panel shows the fallback ladder at each leg",
+      'id="contingency"' in simp.text and "function renderContingency(" in simp.text)
+check("contingency is measured by removing a team, not by guessing injuries",
+      "That is not a forecast of injuries" in simp.text)
 check("a holiday-teams-held path is shown alongside the unrestricted one",
       "function firstHolidayLeg(" in simp.text and "Holiday teams held" in simp.text)
 check("a held holiday team is free again from its own leg onward",
