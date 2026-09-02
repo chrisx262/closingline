@@ -242,6 +242,21 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: survivor page reordered -- Scenario Simulator now sits directly
+  under the week board, above Entry Portfolio. Owner: "it seem very disjointed
+  because i have to scroll too far from the entry to the sim."
+- 2026-09-01: PINNED LIVE BAR (#livebar, position:fixed, bottom). The board is
+  30-odd rows, so by the time you are clicking a team every number is off
+  screen -- you could not watch a value move while causing it to move.
+- 2026-09-01: useTeam() now sets the picked entry active. The per-entry panel
+  was welded to entry 1, so picking on entries 2 and 3 changed nothing visible;
+  two clicks in three looked like a dead tool.
+- 2026-09-01: the bar states the cost of every pick INCLUDING when it is zero
+  ("CHI costs you nothing at either holiday leg"). Most picks are free, and
+  silence about that is indistinguishable from a bug -- which is exactly how the
+  owner reported it. Cost is measured by re-running the entry with that team
+  omitted (simulate(...omitTeam)), not by diffing the previous render, which
+  broke as soon as the active entry changed.
 - 2026-09-01: simulator shows the ACTIVE ENTRY on its own, above the
   portfolio-wide cards. Found by the owner: he used a team on entry 1 and
   nothing on screen moved. Everything shown was an "any of my 10 entries"

@@ -366,6 +366,16 @@ check("small probabilities are HTML-escaped, not swallowed as a tag",
       "&lt;1%" in sp.text and "return '<1%'" not in sp.text
       and "return '>99%'" not in sp.text)
 check("simulate() can be restricted to one entry", "onlyId" in sp.text)
+check("a pinned live bar follows you down the long board",
+      'id="livebar"' in sp.text and "position:fixed" in sp.text)
+check("picking on an entry makes that entry the one on screen",
+      "LASTPICK={t:team,n:String(n)}" in sp.text)
+# A pick that costs nothing is the common case; saying nothing about it is
+# indistinguishable from the tool being broken, which is how this was found.
+check("the bar states the cost of a pick even when it is zero",
+      "costs you nothing at either holiday leg" in sp.text)
+check("pick cost is measured by re-running without that pick, not by diffing "
+      "whatever was last on screen", "omitTeam" in sp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it

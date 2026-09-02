@@ -275,6 +275,32 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   padding:.35rem;border-radius:8px;border:1px solid var(--line);
   background:var(--panel);color:var(--ink)}
 .ecount-ctl .ehintsm{color:var(--dim);font-size:.72rem}
+/* live bar -- pinned so the numbers are visible while you work the board */
+body{padding-bottom:4.2rem}
+.livebar{position:fixed;left:0;right:0;bottom:0;z-index:60;
+  background:var(--panel);border-top:1px solid var(--line);
+  box-shadow:0 -6px 18px rgba(0,0,0,.10);padding:.5rem .9rem;
+  display:flex;align-items:center;gap:.9rem;flex-wrap:wrap;
+  font-size:.72rem;font-weight:800}
+.livebar .lbwho{font-weight:900;font-size:.8rem;white-space:nowrap}
+.livebar .lbwho small{display:block;color:var(--dim);font-size:.6rem;font-weight:700}
+.livebar .lbstat{display:flex;flex-direction:column;line-height:1.15;white-space:nowrap}
+.livebar .lbstat i{color:var(--dim);font-size:.55rem;font-style:normal;font-weight:900;
+  letter-spacing:.05em;text-transform:uppercase}
+.livebar .lbstat b{font-size:.86rem}
+.livebar .lbspent{color:var(--dim);font-weight:700;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;flex:1;min-width:0}
+.livebar .lbcost{flex:1;min-width:0;font-weight:800;font-size:.7rem;
+  padding:.22rem .55rem;border-radius:999px;border:1px solid var(--line)}
+.livebar .lbcost.ok{color:var(--dim)}
+.livebar .lbcost.bad{color:var(--down);
+  border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
+.livebar .bump{animation:lbflash .9s ease-out}
+@keyframes lbflash{0%{background:color-mix(in srgb,var(--up) 45%,transparent);
+  border-radius:5px}100%{background:transparent;border-radius:5px}}
+@media (prefers-reduced-motion:reduce){.livebar .bump{animation:none}}
+@media (max-width:640px){.livebar{gap:.6rem;font-size:.66rem}
+  .livebar .lbspent{display:none}}
 /* scenario simulator */
 .entrypanel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
   padding:.8rem 1rem;box-shadow:var(--shadow);margin-bottom:.9rem}
@@ -394,6 +420,28 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
 </section>
 
 <section>
+  <h2>Scenario <em>Simulator</em></h2>
+  <p class="subnote">Plays out the rest of the season ten thousand times over, using your
+  actual entries and the teams you have already spent. Change anything above &mdash; use a
+  team, mark an entry out &mdash; and this rebuilds. Use it to compare two plans, not to
+  predict a week: the ordering is trustworthy, the exact percentages are not.</p>
+  <div class="simctl">
+    <button id="simReserve" class="on" onclick="toggleReserve()">Holding holiday teams back</button>
+    <span class="simnote" id="simstatus"></span>
+  </div>
+  <div id="simentry"></div>
+  <div class="simcards" id="simcards"></div>
+  <div id="simcurve"></div>
+  <h3 style="font-size:.95rem;margin:.2rem 0 .5rem">If you pick this now, what happens later?</h3>
+  <p class="subnote" style="margin-top:0">Each option re-runs the whole season with that team
+  spent here. The last two columns are the team you would still have for each holiday leg
+  &mdash; a red number is what taking this pick costs you there. Most picks cost nothing;
+  the ones that do are the decision.</p>
+  <div id="simcompare"></div>
+  <div id="simhold"></div>
+</section>
+
+<section>
   <h2>Entry <em>Portfolio</em></h2>
   <p class="subnote">A diversified split for this week across all of your entries —
   concentrating some on the safest board and spreading the rest, so a single upset
@@ -417,28 +465,6 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   <div class="planwrap" id="planner"></div>
 </section>
 
-<section>
-  <h2>Scenario <em>Simulator</em></h2>
-  <p class="subnote">Plays out the rest of the season ten thousand times over, using your
-  actual entries and the teams you have already spent. Change anything above &mdash; use a
-  team, mark an entry out &mdash; and this rebuilds. Use it to compare two plans, not to
-  predict a week: the ordering is trustworthy, the exact percentages are not.</p>
-  <div class="simctl">
-    <button id="simReserve" class="on" onclick="toggleReserve()">Holding holiday teams back</button>
-    <span class="simnote" id="simstatus"></span>
-  </div>
-  <div id="simentry"></div>
-  <div class="simcards" id="simcards"></div>
-  <div id="simcurve"></div>
-  <h3 style="font-size:.95rem;margin:.2rem 0 .5rem">If you pick this now, what happens later?</h3>
-  <p class="subnote" style="margin-top:0">Each option re-runs the whole season with that team
-  spent here. The last two columns are the team you would still have for each holiday leg
-  &mdash; a red number is what taking this pick costs you there. Most picks cost nothing;
-  the ones that do are the decision.</p>
-  <div id="simcompare"></div>
-  <div id="simhold"></div>
-</section>
-
 <p class="footnote">
 <b>How the number is built:</b> win probability comes from the de-vigged market moneyline
 (closing/latest snapshot), which beat our own model at picking winners in backtesting —
@@ -449,6 +475,7 @@ prediction — ties eliminate you and no pick is ever safe.
 If gambling is a problem, call <span>1-800-GAMBLER</span>.</div>
 </p>
 </div>
+<div class="livebar" id="livebar" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -575,6 +602,10 @@ function useTeam(team,n){
   var have=pickForWeek(n,wk);
   if(have){toast('Entry '+n+' already has '+have.t+' for week '+wk+' — ✕ it first to switch');return;}
   e[n].push({t:team,w:wk});saveEntries(e);
+  /* Follow the click. Picking on entry 3 while the panel stayed pinned to
+     entry 1 meant two clicks out of three showed the owner nothing move. */
+  localStorage.setItem(AK,String(n));
+  LASTPICK={t:team,n:String(n)};
   var hl=holidayLegsFor(team);
   toast(team+' → Entry '+n+(wk?' (week '+wk+')':'')+
         (hl.length?' — note: plays the '+hl.map(function(l){return l.name;}).join(' & '):''));
@@ -983,6 +1014,10 @@ var TIE_RATE=0.0035;      /* NFL ties run about 1 game in 285, and a tie ends a
                              Circa entry outright. Small per leg, not small
                              across twenty of them. */
 var SIM_SEASONS=10000, SIM_COMPARE=1500, RESERVE=true;
+/* previous pinned-bar values, so a changed number can flash, and the pick that
+   caused it, so the bar can say what that pick cost -- including when it cost
+   nothing, which is the common case and otherwise looks like a broken tool */
+var LASTBAR=null, LASTPICK=null;
 
 /* Seeded so the same board always gives the same answer -- if a number moves,
    it moved because you changed something, not because the dice rolled again. */
@@ -1057,7 +1092,7 @@ function runEntry(legs,used,res,rnd,forceTeam,rec){
   }
   return -1;
 }
-function simulate(n,reserve,forceTeam,forceEntry,onlyId){
+function simulate(n,reserve,forceTeam,forceEntry,onlyId,omitTeam){
   var legs=buildLegs();
   if(!legs.length)return null;
   var ids=aliveIds();
@@ -1067,7 +1102,14 @@ function simulate(n,reserve,forceTeam,forceEntry,onlyId){
   if(onlyId)ids=ids.filter(function(x){return x===onlyId;});
   if(!ids.length)return null;
   var pre=ids.map(function(id){
-    var u={};usedBy(id).forEach(function(t){u[t]=1;});
+    var u={};
+    usedBy(id).forEach(function(t){
+      /* omitTeam re-runs an entry as if it had never spent that team, which is
+         how the exact cost of the pick just made is measured -- rather than
+         diffing against whatever happened to be on screen before. */
+      if(omitTeam&&id===onlyId&&t===omitTeam)return;
+      u[t]=1;
+    });
     return {id:id,used:u,res:reserve?reservationsFor(legs,u):{}};
   });
   var alive=[],i;
@@ -1122,7 +1164,9 @@ function renderSim(){
       st=document.getElementById('simstatus');
   if(!WEEKS.length||!aliveIds().length){
     cards.innerHTML='<div class="empty" style="grid-column:1/-1">Nothing to simulate yet.</div>';
-    curve.innerHTML='';cmp.innerHTML='';hold.innerHTML='';st.textContent='';return;
+    curve.innerHTML='';cmp.innerHTML='';hold.innerHTML='';st.textContent='';
+    document.getElementById('simentry').innerHTML='';
+    document.getElementById('livebar').hidden=true;LASTBAR=null;LASTPICK=null;return;
   }
   var t0=(window.performance&&performance.now)?performance.now():0;
   var r=simulate(SIM_SEASONS,RESERVE,null,null);
@@ -1158,6 +1202,52 @@ function renderSim(){
       '<span><i>typical exit</i> leg '+Math.round(me.avgReach)+'</span></div>';
   }
   document.getElementById('simentry').innerHTML=meH+'</div>';
+
+  /* The pinned bar. The board is 30-odd rows long, so the panel above is off
+     screen by the time you are clicking a team -- you cannot see a number move
+     while you are causing it to move. This follows you down the page and
+     flashes whatever changed. */
+  var bar=document.getElementById('livebar');
+  if(me){
+    var now={sp:spent.length,
+             t:iTm>0?Math.round(me.alive[iTm-1]/me.n*100):null,
+             x:iXm>0?Math.round(me.alive[iXm-1]/me.n*100):null,
+             ft:me.fielded[0]==null?null:Math.round(me.fielded[0]*100),
+             fx:me.fielded[1]==null?null:Math.round(me.fielded[1]*100)};
+    var prev=(LASTBAR&&LASTBAR[actId])||{};
+    function fl(k,html){
+      return '<span class="lbstat'+(prev[k]!=null&&prev[k]!==now[k]?' bump':'')+'">'+html+'</span>';
+    }
+    var lb='<span class="lbwho">Entry '+actId+'<small>'+now.sp+' of '+legs.length+
+      ' legs spent</small></span>';
+    lb+=fl('ft','<i>&#127860; you would field</i><b>'+(now.ft==null?'--':now.ft+'%')+'</b>');
+    lb+=fl('fx','<i>&#127876; you would field</i><b>'+(now.fx==null?'--':now.fx+'%')+'</b>');
+    lb+=fl('x','<i>reaches &#127876;</i><b>'+(now.x==null?'--':pc(me.alive[iXm-1]/me.n))+'</b>');
+    /* Say what the last pick cost. A holiday-leg team you were not holding
+       costs nothing, and silence about that is indistinguishable from a bug. */
+    var verdict='';
+    if(LASTPICK&&LASTPICK.n===actId&&spent.indexOf(LASTPICK.t)>=0){
+      var wo=simulate(SIM_SEASONS,RESERVE,null,null,actId,LASTPICK.t);
+      if(wo){
+        var wt=wo.fielded[0]==null?null:Math.round(wo.fielded[0]*100);
+        var wx=wo.fielded[1]==null?null:Math.round(wo.fielded[1]*100);
+        var bits=[];
+        if(wt!=null&&now.ft!=null&&now.ft<wt)
+          bits.push('&#127860; '+wt+'% &rarr; '+now.ft+'%');
+        if(wx!=null&&now.fx!=null&&now.fx<wx)
+          bits.push('&#127876; '+wx+'% &rarr; '+now.fx+'%');
+        verdict=bits.length
+          ?'<span class="lbcost bad">'+LASTPICK.t+' cost you '+bits.join(', ')+'</span>'
+          :'<span class="lbcost ok">'+LASTPICK.t+' costs you nothing at either holiday leg</span>';
+      }
+    }
+    lb+=verdict||('<span class="lbspent">'+(spent.length?'spent: '+spent.join(' &middot; '):
+      'nothing spent yet')+'</span>');
+    bar.innerHTML=lb;
+    bar.hidden=false;
+    if(!LASTBAR)LASTBAR={};
+    LASTBAR[actId]=now;
+  }else{bar.hidden=true;LASTBAR=null;}
 
   /* headline numbers, across every entry you still have alive */
   var cardsH='';
