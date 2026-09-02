@@ -44,6 +44,12 @@ table.bp td.bl{color:var(--dim);white-space:nowrap}
 table.bp tr.hol td.bl{color:var(--down);font-weight:900}
 table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem}
 table.bp td.gd .same{color:var(--dim);font-weight:700}
+.bpstart{margin-bottom:.9rem}
+.bpslab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:.35rem}
+table.bp tr.sel td{background:color-mix(in srgb,var(--save) 12%,transparent)}
+table.bp .same{color:var(--up);font-weight:900}
+table.bp .delta.dn{color:var(--down);font-weight:800}
 .usebtn{font:inherit;font-weight:800;font-size:.62rem;padding:.22rem .6rem;
   border-radius:999px;border:1px solid var(--line);background:var(--panel);
   color:var(--ink);cursor:pointer;white-space:nowrap}
@@ -609,7 +615,7 @@ function hungarian(cost,n,m){
 }
 
 /* Best assignment of remaining teams to remaining legs for ONE entry. */
-function bestPath(legs,usedList){
+function bestPath(legs,usedList,forceFirst){
   var used={};(usedList||[]).forEach(function(t){used[t]=1;});
   /* every team that could still be played somewhere ahead */
   var teams=[],seen={};
@@ -628,6 +634,14 @@ function bestPath(legs,usedList){
       cost[i+1][j]=-Math.log(wp);
     });
   });
+  /* Pin the first leg to a chosen team and let the solver find the best
+     continuation from there. That is the difference between "what is the best
+     path" and "what is the best path if I start with Jacksonville", and only
+     the second one is a decision you can actually take this week. */
+  if(forceFirst){
+    if(!idx[forceFirst])return null;
+    for(var jf=1;jf<=m;jf++){if(teams[jf-1]!==forceFirst)cost[1][jf]=BIG;}
+  }
   var assign=hungarian(cost,n,m);
   var out=[],logsum=0,ok=true;
   for(var i2=1;i2<=n;i2++){
@@ -672,12 +686,49 @@ function greedyPath(legs,usedList){
           feasible:ok};
 }
 
+var BPSTART=null;   /* team pinned to the first remaining leg, or null */
+function setBpStart(t){BPSTART=(t===BPSTART||t==='')?null:t;renderBestPath();}
+
 function renderBestPath(){
   var el=document.getElementById('bestpath');
   if(!el)return;
   if(!WEEKS.length||!aliveIds().length){el.innerHTML='';return;}
   var legs=buildLegs(),act=active();
-  var bp=bestPath(legs,usedBy(act));
+  var free=bestPath(legs,usedBy(act));
+  /* Every team you could open with, each followed by ITS best continuation.
+     Ranked by where you end up, not by this week's win probability -- the
+     whole point is that those two orders are not the same. */
+  var usedAct={};usedBy(act).forEach(function(t){usedAct[t]=1;});
+  var opts=[];
+  legs[0].teams.forEach(function(p){
+    if(usedAct[p.team])return;
+    var r=bestPath(legs,usedBy(act),p.team);
+    if(r&&r.feasible)opts.push({team:p.team,wp:p.wp,opp:p.opp,home:p.home,s:r.survive});
+  });
+  opts.sort(function(a,b){return b.s-a.s;});
+  if(BPSTART&&!opts.some(function(o){return o.team===BPSTART;}))BPSTART=null;
+  var top=opts.length?opts[0].s:0;
+  var startH='';
+  if(opts.length){
+    startH='<div class="bpstart"><div class="bpslab">Open with &mdash; ranked by where the '+
+      'whole season ends up, not by this week</div><table class="bp"><tr><th>Team</th>'+
+      '<th>This leg</th><th>Best path from there</th><th>vs best</th><th></th></tr>';
+    opts.slice(0,10).forEach(function(o,i){
+      var d=o.s-top, sel=(BPSTART===o.team)||(!BPSTART&&i===0);
+      startH+='<tr class="'+(sel?'sel':'')+'"><td>'+
+        '<span class="tchip" style="background:'+tcol(o.team)+
+        ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+o.team+'</span> '+
+        (o.home?'vs ':'at ')+o.opp+'</td>'+
+        '<td class="n">'+Math.round(o.wp*100)+'%</td>'+
+        '<td class="n">'+(o.s*100).toFixed(3)+'%</td>'+
+        '<td class="n">'+(i===0?'<span class="same">best</span>':
+          '<span class="delta dn">'+(d/top*100).toFixed(0)+'%</span>')+'</td>'+
+        '<td class="n"><button class="usebtn" onclick="setBpStart(&#39;'+o.team+'&#39;)">'+
+        (BPSTART===o.team?'clear':'show')+'</button></td></tr>';
+    });
+    startH+='</table></div>';
+  }
+  var bp=BPSTART?bestPath(legs,usedBy(act),BPSTART):free;
   if(!bp){el.innerHTML='<div class="empty">Not enough unused teams left to fill every '+
     'remaining leg &mdash; this entry cannot legally finish the season.</div>';return;}
   /* exact against exact -- see greedyPath */
@@ -685,8 +736,9 @@ function renderBestPath(){
   var gs=gp?gp.survive:0;
   var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r.team;});
   var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
-  var h='<div class="bpwrap"><div class="bphead">'+
-    '<span><i>best path survives all '+legs.length+'</i><b>'+pc(bp.survive)+'</b></span>'+
+  var h='<div class="bpwrap">'+startH+'<div class="bphead">'+
+    '<span><i>'+(BPSTART?('path if you open with '+BPSTART):'best path')+
+      ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b></span>'+
     '<span><i>greedy policy manages</i><b>'+pc(gs)+'</b></span>'+
     '<span><i>legs still estimated</i><b>'+est+' of '+legs.length+'</b></span></div>';
   h+='<table class="bp"><tr><th>Leg</th><th>Take</th><th>Win%</th>'+

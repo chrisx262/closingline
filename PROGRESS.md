@@ -242,6 +242,15 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: BEST PATH takes a pinned opening team (bestPath(...,forceFirst)),
+  so the owner can ask "what if I start with JAX or LV" and get the optimal
+  continuation from there rather than only the unconstrained optimum. The panel
+  ranks every opening option BY WHERE THE SEASON ENDS UP, not by this week's win
+  probability, and the two orders differ sharply: DET at 72% this week lands
+  BELOW LV at 64% and PIT at 61%, because the optimum wants Detroit in week 5
+  and has no later use for Las Vegas or Pittsburgh. JAX at 77% costs only 4%
+  against opening with LAC, because LAC simply slides to week 2 at 75%. That gap
+  between "best now" and "best overall" is the entire value of the panel.
 - 2026-09-01: BEST POSSIBLE PATH on /survivor/sim, at the owner's suggestion
   ("can the simulator take the bigger edge wk X and project a winning entry
   look ahead?"). Assigning 20 legs from 32 teams to maximise survival is an

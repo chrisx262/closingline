@@ -363,6 +363,10 @@ check("the simulator carries a best-path panel",
       'id="bestpath"' in simp.text and "hungarian" in simp.text)
 check("best path is compared against greedy computed the same exact way, "
       "not against a Monte Carlo estimate", "function greedyPath(" in simp.text)
+check("you can pin the opening team and re-solve from there",
+      "function setBpStart(" in simp.text and "forceFirst" in simp.text)
+check("opening options are ranked by where the season ends up, not by this week",
+      "ranked by where the " in simp.text)
 check("best path warns it is not a script to follow",
       "not a script to follow" in simp.text)
 
