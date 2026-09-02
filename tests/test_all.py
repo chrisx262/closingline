@@ -406,6 +406,14 @@ check("the holiday numbers name their own source", "legsrc" in simp.text)
 # moved 10 of 31 teams' star ratings. The flag must declare that mix rather
 # than implying every star rests on a real line.
 # The future-value flag is on the board, which stayed on the helper page.
+# "consider saving" is the flag that changes what you do with a pick, so it is
+# blue and filled rather than a third outline in the row. --mid cannot be used:
+# it is blue in the light palette and tan in the dark one.
+check("the save flag has its own colour in both themes",
+      "--save:#1f6feb" in sp.text and "--save:#7cb0ff" in sp.text)
+check("the save flag reads as blue, not gold",
+      "color:var(--save)" in sp.text and "flag.save{color:var(--gold)" not in sp.text)
+
 check("future value declares how much of it is estimated",
       "still estimated, so treat the star count as a rough sort" in sp.text)
 check("weeks-ahead count is split into market vs estimated",

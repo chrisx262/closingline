@@ -20,14 +20,14 @@ CORE_CSS = """
 :root{
   --bg:#fbfcfd; --panel:#ffffff; --panel2:#f2f5f9; --ink:#122036;
   --dim:#64748b; --line:#dde4ec; --rule:#122036;
-  --up:#0b9a72; --down:#d43d2a; --gold:#c8901f; --mid:#2f6fd0;
+  --up:#0b9a72; --down:#d43d2a; --gold:#c8901f; --mid:#2f6fd0; --save:#1f6feb;
   --tickbg:#122036; --tickfg:#dbe4f0; --tickhi:#f5b53f;
   --shadow:0 1px 3px rgba(18,32,54,.05);
 }
 [data-theme="dark"]{
   --bg:#12100b; --panel:#1b1712; --panel2:#241e15; --ink:#efe7d5;
   --dim:#a1957c; --line:#352c1f; --rule:#4a3e2b;
-  --up:#5fb56d; --down:#e2694f; --gold:#e8b64c; --mid:#d3a94f;
+  --up:#5fb56d; --down:#e2694f; --gold:#e8b64c; --mid:#d3a94f; --save:#7cb0ff;
   --tickbg:#0b0906; --tickfg:#d8cdb2; --tickhi:#ffc94d;
   --shadow:none;
 }
@@ -155,7 +155,9 @@ h2 em{font-style:normal;color:var(--up)}
 .flags{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.35rem}
 .flag{font-weight:800;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;
   padding:.16rem .42rem;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
-.flag.save{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 45%,var(--line))}
+.flag.save{color:var(--save);font-weight:900;
+  border-color:color-mix(in srgb,var(--save) 55%,var(--line));
+  background:color-mix(in srgb,var(--save) 12%,transparent)}
 .flag.fv{color:var(--mid);border-color:color-mix(in srgb,var(--mid) 45%,var(--line));
   letter-spacing:.02em}
 .flag.contra{color:var(--mid);border-color:color-mix(in srgb,var(--mid) 45%,var(--line))}
