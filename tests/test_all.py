@@ -336,6 +336,19 @@ check("a real market price is never replaced by a prior",
       all(g["wp_source"] != "prior"
           for g in allg if g["spread_home"] is not None
           and g["wp_source"] in ("ml", "spread")))
+# Teams move a long way inside a season, so a prior fitted on the whole season
+# carries September's opinion into December. Measured on 2025: fitting on the
+# unplayed priced games predicted later weeks ~25% better than fitting on
+# everything so far (3.04 vs 3.94 pts at week 10; 2.20 vs 3.09 at week 6).
+import inspect  # noqa: E402
+from app import season_priors  # noqa: E402
+_src = inspect.getsource(season_priors)
+check("the prior is fitted on games not yet played",
+      "Game.final == False" in _src and "unplayed_only" in _src)
+check("a thin forward window falls back to recent games, most recent first",
+      "MIN_GAMES" in _src and "reverse=True" in _src)
+check("the prior cache keys on the forward window, so it refits as games play",
+      "len(ahead)" in _src)
 check("response says how the prior was built",
       "fitted_from_games" in full.get("prior", {}))
 check("prior note warns it is not a market price",

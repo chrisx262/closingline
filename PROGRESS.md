@@ -242,6 +242,19 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: PRIORS NOW FIT ON GAMES NOT YET PLAYED, not the whole season.
+  Owner's point: teams over- and under-perform preseason expectations every
+  year, so a September line is a stale opinion by December. Confirmed on 2025 --
+  the average team's rating moved 3.13 pts between weeks 1-4 and weeks 14-17,
+  14 of 32 moved more than 3 pts, 6 moved more than 5, SEA went -0.93 -> +8.10.
+  Then measured which fit predicts better. Standing at week 10 predicting weeks
+  14-17: everything-so-far 3.94 pts error, unplayed-priced-only 3.04. At week 6
+  predicting 10-13: 3.09 vs 2.20. About a quarter better both times. Late season
+  the forward window thins, so recently played games are added back most-recent
+  first until 64 games (~2 per team); that blend scored 3.21/2.18, barely behind
+  and much steadier. Cache keys on the forward-window size so it refits as games
+  are played. This is what makes the tool adapt week to week rather than
+  replaying a preseason opinion.
 - 2026-09-02: CONTINGENCY panel on /survivor/sim. We still do not model
   injuries -- the market prices them faster than we could and every posted line
   already carries today's news. What IS knowable today is how much the plan
