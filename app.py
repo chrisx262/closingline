@@ -1167,6 +1167,19 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
 
     out_weeks = []
     ratings, hfa, n_priced = ({}, 0.0, 0)
+    # When the newest price behind these numbers was actually captured. Without
+    # it a caller cannot tell whether this morning's injury is in here yet,
+    # which is the only question that matters after a quarterback goes down.
+    #
+    # Only snapshots at or before NOW count. The nflverse archive timestamps its
+    # rows at kickoff, so an unplayed game carries a capture time in the future;
+    # taking the plain maximum reported odds "captured" in December and an age of
+    # minus four months. A future timestamp means the price came from the seeded
+    # archive rather than a live capture, which is worth saying rather than
+    # dressing up as fresh.
+    as_of = None
+    seeded_only = False
+    _now = datetime.utcnow()
     if season is not None:
         ratings, hfa, n_priced = season_priors(s, season)
         for wk in range(start_week, start_week + weeks):
@@ -1177,6 +1190,11 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
                 snap = closing_snapshot(s, g)
                 home_wp, src = None, None
                 spread = snap.spread_home_line if snap else None
+                if snap and snap.captured_at is not None:
+                    if snap.captured_at > _now:
+                        seeded_only = True
+                    elif as_of is None or snap.captured_at > as_of:
+                        as_of = snap.captured_at
                 if snap and snap.ml_home is not None and snap.ml_away is not None:
                     home_wp, src = devig_two_way(snap.ml_home, snap.ml_away), "ml"
                 elif snap and snap.spread_home_line is not None:
@@ -1198,6 +1216,12 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
                     "spread_home": round(spread, 1) if spread is not None else None})
             out_weeks.append({"week": wk, "games": rows})
     return {"season": season, "start_week": start_week, "weeks": out_weeks,
+            "as_of": as_of.isoformat() if as_of else None,
+            "as_of_note": (None if as_of else
+                           ("These prices come from the seeded archive, not a live "
+                            "capture, so they cannot reflect anything that happened "
+                            "today." if seeded_only else
+                            "No odds snapshot has been taken yet.")),
             "prior": {
                 "fitted_from_games": n_priced,
                 "home_field": round(hfa, 2),

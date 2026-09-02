@@ -93,6 +93,7 @@ table.bp .delta.dn{color:var(--down);font-weight:800}
 </section>
 
 <section>
+  <div class="asofbar" id="asof"></div>
   <div class="weeknav">
     <button onclick="stepWeek(-1)">&lsaquo; Prev</button>
     <span class="wtitle" id="wtitle">Week &mdash;</span>

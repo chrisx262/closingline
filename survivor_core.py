@@ -152,6 +152,9 @@ h2 em{font-style:normal;color:var(--up)}
   color:#fff;flex:none;letter-spacing:.02em}
 .mteam b{font-size:1.02rem;font-weight:800}
 .vs{color:var(--dim);font-size:.78rem;font-weight:600;margin-top:.2rem}
+.asofbar{margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.asof{color:var(--dim);font-size:.66rem;font-weight:800}
+.asof.stale{color:var(--down)}
 .flags{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.35rem}
 .flag{font-weight:800;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;
   padding:.16rem .42rem;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
@@ -567,6 +570,36 @@ function indexHol(weeksArr){
   (weeksArr||[]).forEach(function(w){(w.games||[]).forEach(function(g){
     if(g.home_wp!=null)HOLWP[g.away+'@'+g.home]={aw:g.away_wp,hw:g.home_wp};});});
 }
+/* How old the numbers are, and a way to go and get new ones. After a
+   quarterback goes down the only question is whether the market has repriced
+   yet and whether we have that price -- a page that cannot answer it is worse
+   than useless, because it looks current. */
+function renderAsOf(){
+  var el=document.getElementById('asof');
+  if(!el)return;
+  if(!DATA){el.innerHTML='';return;}
+  if(!DATA.as_of){
+    el.innerHTML='<span class="asof stale">'+(DATA.as_of_note||'No live odds capture.')+
+      '</span> <button class="usebtn" onclick="reloadOdds()">Refresh</button>';
+    return;
+  }
+  var t=new Date(DATA.as_of+'Z'), mins=Math.round((Date.now()-t.getTime())/60000);
+  var age = mins<90 ? (mins+' min old')
+          : mins<2880 ? (Math.round(mins/60)+' hours old')
+          : (Math.round(mins/1440)+' days old');
+  var stale = mins>4320;   /* three days: a snapshot slot has been missed */
+  el.innerHTML='<span class="asof'+(stale?' stale':'')+'">Odds captured '+
+    t.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',
+      hour:'numeric',minute:'2-digit'})+' &middot; '+age+
+    (stale?' &mdash; a snapshot has been missed, an injury since then is not in these numbers':'')+
+    '</span> <button class="usebtn" onclick="reloadOdds()">Refresh</button>';
+}
+function reloadOdds(){
+  var el=document.getElementById('asof');
+  if(el)el.innerHTML='<span class="asof">refreshing&hellip;</span>';
+  load();
+}
+
 async function load(){
   var url=PREVIEW?'/data/survivor?season=2025&start_week=6&weeks=8':'/data/survivor?weeks=18';
   try{DATA=await (await fetch(url)).json();}catch(e){DATA={weeks:[]};}
@@ -574,6 +607,7 @@ async function load(){
   indexHol(DATA.weeks);
   curIdx=0;
   renderAll();
+  renderAsOf();
   // holiday legs are weeks 12 & 16 — usually outside the 8-week board window, so
   // pull those weeks' win probs on their own (fills in once the market posts them).
   if(!PREVIEW){[12,16].forEach(function(wk){

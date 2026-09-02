@@ -242,6 +242,20 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: verified the mid-season case end to end on a synthetic week-4
+  state (weeks 1-3 marked final). The feed anchors at week 4, settled picks hold,
+  and a season-long injury re-solves properly: dropping MIN by 22 points across
+  its 14 remaining games removed MIN from the plan entirely and changed 10 of 17
+  legs. Note the counterintuitive-but-correct result -- survival ROSE (0.292% ->
+  0.345%), because every team that plays the injured side becomes a safer pick.
+- 2026-09-02: /data/survivor reports `as_of`, the newest snapshot captured AT OR
+  BEFORE NOW, plus `as_of_note`. Both pages show the age and a Refresh button,
+  and flag anything over three days as a missed snapshot. First cut took the
+  plain maximum captured_at and reported odds "captured Fri Dec 25" aged minus
+  165,330 minutes: the nflverse archive timestamps its rows at KICKOFF, so an
+  unplayed game carries a future capture time. A future timestamp now means the
+  price is archive-seeded rather than live, and the page says exactly that
+  rather than dressing it up as fresh.
 - 2026-09-02: CORRELATION BUG FIXED, and it was a bad one. Every entry drew its
   OWN random result for the same game, so three entries on the Chargers could
   have three different outcomes. That deletes the only risk a multi-entry

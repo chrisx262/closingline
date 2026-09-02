@@ -69,6 +69,7 @@ SURVIVOR_HTML = shell(
 </section>
 
 <section>
+  <div class="asofbar" id="asof"></div>
   <div class="weeknav">
     <button onclick="stepWeek(-1)">‹ Prev</button>
     <span class="wtitle" id="wtitle">Week —</span>

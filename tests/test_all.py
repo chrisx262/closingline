@@ -365,6 +365,24 @@ check("best path is compared against greedy computed the same exact way, "
       "not against a Monte Carlo estimate", "function greedyPath(" in simp.text)
 # Entries picking the same team in the same leg must share one game result --
 # that shared fate is the entire risk a multi-entry portfolio manages.
+# After a QB goes down the only question is whether the market has repriced and
+# whether we hold that price. A page that cannot answer it looks current.
+sv_asof = c.get("/data/survivor?weeks=4").json()
+check("the feed says when its newest price was captured", "as_of" in sv_asof)
+check("both survivor pages show how old the odds are",
+      'id="asof"' in sp.text and 'id="asof"' in simp.text)
+# The nflverse archive timestamps rows at kickoff, so an unplayed game's
+# snapshot sits in the future. Taking the plain max reported odds "captured" in
+# December, four months old in the negative direction.
+check("a future snapshot time is never reported as the capture time",
+      sv_asof.get("as_of") is None or
+      sv_asof["as_of"] <= __import__("datetime").datetime.utcnow().isoformat())
+check("archive-seeded prices say so instead of looking live",
+      sv_asof.get("as_of") is not None or "seeded archive" in (sv_asof.get("as_of_note") or ""))
+check("stale odds are called out, not shown as if current",
+      "a snapshot has been missed" in simp.text)
+check("odds can be refreshed without a page reload",
+      "function reloadOdds(" in simp.text)
 check("one game gives one result to every entry that picked it",
       "ONE GAME, ONE RESULT" in simp.text and "if(out&&key in out)" in simp.text)
 check("the portfolio spreads entries instead of cloning the best path",
