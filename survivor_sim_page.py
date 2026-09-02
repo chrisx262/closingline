@@ -42,7 +42,8 @@ table.bp td{padding:.3rem .4rem;border-bottom:1px solid var(--line);font-size:.7
 table.bp td.n{text-align:right;font-variant-numeric:tabular-nums}
 table.bp td.bl{color:var(--dim);white-space:nowrap}
 table.bp tr.hol td.bl{color:var(--down);font-weight:900}
-table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem}
+table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem;white-space:nowrap}
+table.bp td.gd .gwp{font-variant-numeric:tabular-nums}
 table.bp td.gd .same{color:var(--dim);font-weight:700}
 .bphead small{display:block;color:var(--dim);font-size:.58rem;font-weight:700}
 table.bp.pp td.pc{text-align:center;padding:.22rem .25rem}
@@ -925,7 +926,9 @@ function renderBestPath(){
   /* exact against exact -- see greedyPath */
   var gp=greedyPath(legs,usedBy(act),settled);
   var gs=gp?gp.survive:0;
-  var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r.team;});
+  /* keep the whole greedy row, not just the team name, so this column can read
+     the same way as the one beside it: TEAM vs OPP */
+  var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r;});
   var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
   var h='<div class="bpwrap">'+startH+'<div class="bphead">'+
     '<span><i>'+(BPSTART?('path if you open with '+BPSTART):'best path')+
@@ -948,10 +951,11 @@ function renderBestPath(){
        /* Rendered as a chip like every other team on this page. As bare text
           "NO" reads as the word no, not New Orleans -- which is exactly how the
           owner read it. */
-       '<td class="gd">'+((gmap[i]&&gmap[i]!==r.team)
-         ?('<span class="tchip" style="background:'+tcol(gmap[i])+
-           ';min-width:2.2rem;height:1.3rem;font-size:.62rem" title="the greedy rule '+
-           'would spend '+gmap[i]+' here">'+gmap[i]+'</span>')
+       '<td class="gd">'+((gmap[i]&&gmap[i].team&&gmap[i].team!==r.team)
+         ?('<span class="tchip" style="background:'+tcol(gmap[i].team)+
+           ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+gmap[i].team+'</span> '+
+           (gmap[i].home?'vs ':'at ')+(gmap[i].opp||'')+
+           (gmap[i].wp!=null?' <span class="gwp">'+Math.round(gmap[i].wp*100)+'%</span>':''))
          :'<span class="same">same</span>')+
        '</td></tr>';
   });
