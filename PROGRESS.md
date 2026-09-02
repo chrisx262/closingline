@@ -242,6 +242,26 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: CORRELATION BUG FIXED, and it was a bad one. Every entry drew its
+  OWN random result for the same game, so three entries on the Chargers could
+  have three different outcomes. That deletes the only risk a multi-entry
+  portfolio exists to manage. Entries picking the same team in the same leg now
+  share one result. Effect: ten IDENTICAL entries now score exactly the same as
+  one entry (reach Thx 5%, Xmas 1%, table 0.10%), where before they showed
+  29%/4%/1.1%. Every multi-entry number reported before 2026-09-02 was inflated.
+- 2026-09-02: PORTFOLIO OF PATHS on /survivor/sim. Entries are solved in turn,
+  each charged CLASH=0.35 log-probability for every team it would share with an
+  entry already placed, so the ten paths deliberately differ. Scored by
+  simulatePaths(), which plays them together sharing one result per game --
+  the effect being measured IS the correlation, so it cannot be computed entry
+  by entry. Diversified vs all-on-the-best-path, 10 entries: reach Thanksgiving
+  16% vs 5%, any runs the table 0.40% vs 0.20%. Nine distinct week-1 teams.
+- 2026-09-02: SETTLED LEGS. bestPath and greedyPath now take the entry's
+  already-made picks and hold those legs fixed instead of re-optimising them --
+  previously the path would show a different week-1 team than the one the owner
+  had just picked. Survival is computed over the legs STILL TO PLAY, since a
+  settled leg has already been survived. Legs carry `week` so a stored pick
+  {t,w} can be matched to the right leg in weeks 12 and 16, which hold two each.
 - 2026-09-02: BEST PATH takes a pinned opening team (bestPath(...,forceFirst)),
   so the owner can ask "what if I start with JAX or LV" and get the optimal
   continuation from there rather than only the unconstrained optimum. The panel

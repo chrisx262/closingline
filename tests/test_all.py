@@ -363,6 +363,20 @@ check("the simulator carries a best-path panel",
       'id="bestpath"' in simp.text and "hungarian" in simp.text)
 check("best path is compared against greedy computed the same exact way, "
       "not against a Monte Carlo estimate", "function greedyPath(" in simp.text)
+# Entries picking the same team in the same leg must share one game result --
+# that shared fate is the entire risk a multi-entry portfolio manages.
+check("one game gives one result to every entry that picked it",
+      "ONE GAME, ONE RESULT" in simp.text and "if(out&&key in out)" in simp.text)
+check("the portfolio spreads entries instead of cloning the best path",
+      "function portfolioPaths(" in simp.text and "var CLASH=" in simp.text)
+check("a portfolio is scored by simulating the paths together, not entry by entry",
+      "function simulatePaths(" in simp.text)
+# A leg already picked is not a decision; re-optimising it made the path
+# disagree with the pick the owner had just made.
+check("legs already picked are settled, not re-optimised",
+      "function settledFor(" in simp.text and "is not a decision any more" in simp.text)
+check("survival is measured over the legs still to play",
+      "charge the owner twice" in simp.text)
 check("you can pin the opening team and re-solve from there",
       "function setBpStart(" in simp.text and "forceFirst" in simp.text)
 check("opening options are ranked by where the season ends up, not by this week",

@@ -44,6 +44,10 @@ table.bp td.bl{color:var(--dim);white-space:nowrap}
 table.bp tr.hol td.bl{color:var(--down);font-weight:900}
 table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem}
 table.bp td.gd .same{color:var(--dim);font-weight:700}
+.bphead small{display:block;color:var(--dim);font-size:.58rem;font-weight:700}
+table.bp.pp td.pc{text-align:center;padding:.22rem .25rem}
+table.bp.pp th.me,table.bp.pp td.me{background:color-mix(in srgb,var(--save) 14%,transparent)}
+table.bp.pp th{text-align:center}
 .bpstart{margin-bottom:.9rem}
 .bpslab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;margin-bottom:.35rem}
@@ -114,6 +118,17 @@ table.bp .delta.dn{color:var(--down);font-weight:800}
   estimates and one injury voids any fixed plan. Read it for the one thing a single week
   cannot tell you: which week the schedule actually wants each team for.</p>
   <div id="bestpath"></div>
+</section>
+
+<section>
+  <h2>Ten paths, <em>not one</em></h2>
+  <p class="subnote">Entries that pick the same team share the same result &mdash; if it
+  loses, they all die together, so ten copies of the best plan are worth about one entry.
+  These paths are solved one after another, each charged for every team it would share
+  with an entry already placed. Most entries end up on worse teams on purpose; the point
+  is not that each survives, it is that <b>one of them</b> does. Your active entry's
+  column is highlighted.</p>
+  <div id="portpaths"></div>
 </section>
 
 <section>
@@ -204,13 +219,13 @@ function buildLegs(){
       return list.length?m/list.length:0;
     }
     if(li<0){legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:all,
-      mkt:priced(all)});return;}
+      week:w.week,mkt:priced(all)});return;}
     var hol=[],rest=[];
     all.forEach(function(p){(isLegGame(w.week,p)?hol:rest).push(p);});
-    if(hol.length)legs.push({id:'H'+li,hol:li,teams:hol,mkt:priced(hol),
+    if(hol.length)legs.push({id:'H'+li,hol:li,teams:hol,mkt:priced(hol),week:w.week,
       label:HOLIDAY_LEGS[li].emoji+' '+HOLIDAY_LEGS[li].name});
     if(rest.length)legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:rest,
-      mkt:priced(rest)});
+      week:w.week,mkt:priced(rest)});
   });
   return legs;
 }
@@ -233,7 +248,7 @@ function reservationsFor(legs,used){
 /* One entry, one season. Returns the leg index it died at, or -1 if it ran the
    table. Dying "for lack of a legal team" is a real Circa outcome and is
    counted as death, not skipped. */
-function runEntry(legs,used,res,rnd,forceTeam,rec){
+function runEntry(legs,used,res,rnd,forceTeam,rec,out){
   var u={},k,i,j,p;
   for(k in used)u[k]=1;
   for(i=0;i<legs.length;i++){
@@ -254,7 +269,16 @@ function runEntry(legs,used,res,rnd,forceTeam,rec){
        questions and only the first one is about reservation. */
     if(rec&&L.hol>=0){rec.n[L.hol]++;rec.sum[L.hol]+=pick.wp;}
     u[pick.team]=1;
-    if(rnd()>=pick.wp*(1-TIE_RATE))return i;
+    /* ONE GAME, ONE RESULT. Entries that pick the same team in the same leg
+       must live or die together -- that shared fate is the entire risk a
+       multi-entry portfolio is built to manage, and drawing separately for each
+       entry quietly deletes it. The 2025 backtest is the cautionary tale: a
+       field lost 32.6% of its entries in week 3 alone, on one Green Bay
+       result. */
+    var key=i+':'+pick.team, won;
+    if(out&&key in out){won=out[key];}
+    else{won=rnd()<pick.wp*(1-TIE_RATE);if(out)out[key]=won;}
+    if(!won)return i;
   }
   return -1;
 }
@@ -283,10 +307,10 @@ function simulate(n,reserve,forceTeam,forceEntry,onlyId,omitTeam){
   var rnd=mulberry32(2026),reachSum=0;
   var rec={n:[0,0],sum:[0,0]};
   for(var s=0;s<n;s++){
-    var best=-1;
+    var best=-1, out={};   /* this season's game results, shared by every entry */
     for(var e=0;e<pre.length;e++){
       var ft=(forceTeam&&pre[e].id===forceEntry)?forceTeam:null;
-      var d=runEntry(legs,pre[e].used,pre[e].res,rnd,ft,rec);
+      var d=runEntry(legs,pre[e].used,pre[e].res,rnd,ft,rec,out);
       var reach=(d<0)?legs.length:d;
       if(reach>best)best=reach;
     }
@@ -556,7 +580,50 @@ function renderSim(){
 }
 
 
-function renderAll(){renderEntries();renderLegTitle();renderSim();renderBestPath();}
+function renderAll(){renderEntries();renderLegTitle();renderSim();renderBestPath();renderPortfolio2();}
+function renderPortfolio2(){
+  var el=document.getElementById('portpaths');
+  if(!el)return;
+  var ids=aliveIds();
+  if(!WEEKS.length||!ids.length){el.innerHTML='';return;}
+  if(ids.length<2){
+    el.innerHTML='<div class="empty">With one entry there is nothing to spread. '+
+      'Add entries above and this shows how they should differ.</div>';return;}
+  var legs=buildLegs();
+  var port=portfolioPaths(legs,ids);
+  var one=bestPath(legs,usedBy(ids[0]),null,null,null,settledFor(ids[0],legs));
+  var same=ids.map(function(id){return {id:id,path:one};});
+  var A=simulatePaths(same,6000), B=simulatePaths(port,6000);
+  var iT=legIdx(legs,'H0'), iX=legIdx(legs,'H1');
+  function pct(r,i){return (i>0&&r.alive[i-1]!=null)?pc(r.alive[i-1]/r.n):'--';}
+  var act=active();
+  var h='<div class="bpwrap"><div class="bphead">'+
+    '<span><i>any of the '+ids.length+' reaches &#127860;</i><b>'+pct(B,iT)+'</b>'+
+      '<small>all on one plan: '+pct(A,iT)+'</small></span>'+
+    '<span><i>any reaches &#127876;</i><b>'+pct(B,iX)+'</b>'+
+      '<small>all on one plan: '+pct(A,iX)+'</small></span>'+
+    '<span><i>any runs the table</i><b>'+(B.all*100).toFixed(2)+'%</b>'+
+      '<small>all on one plan: '+(A.all*100).toFixed(2)+'%</small></span></div>';
+  h+='<table class="bp pp"><tr><th>Leg</th>'+
+     ids.map(function(id){return '<th class="'+(id===act?'me':'')+'">E'+id+'</th>';}).join('')+
+     '</tr>';
+  legs.forEach(function(L,i){
+    h+='<tr class="'+(L.hol>=0?'hol':'')+'"><td class="bl">'+L.label+
+       (L.mkt<0.5?' <i class="estdot">est</i>':'')+'</td>';
+    port.forEach(function(p){
+      var r=p.path&&p.path.rows?p.path.rows[i]:null;
+      var t=r&&r.team;
+      h+='<td class="pc '+(p.id===act?'me':'')+'">'+(t?
+        '<span class="tchip" style="background:'+tcol(t)+
+        ';min-width:2.1rem;height:1.2rem;font-size:.58rem" title="'+
+        (r.home?'vs ':'at ')+r.opp+' &middot; '+Math.round(r.wp*100)+'%">'+t+'</span>'
+        :'<span style="color:var(--down)">&mdash;</span>')+'</td>';
+    });
+    h+='</tr>';
+  });
+  el.innerHTML=h+'</table></div>';
+}
+
 /* ================= BEST POSSIBLE PATH =================
    The simulator's policy is greedy: each leg it takes the best team still legal
    to it, minus whatever is being held for a holiday. Greedy is not optimal and
@@ -615,23 +682,61 @@ function hungarian(cost,n,m){
 }
 
 /* Best assignment of remaining teams to remaining legs for ONE entry. */
-function bestPath(legs,usedList,forceFirst){
+/* Legs this entry has already decided, as legIndex -> team. A pick is stored as
+   {t:team, w:week}, and weeks 12 and 16 hold two legs each, so the team itself
+   settles which one: if it plays the holiday game that week the pick belongs to
+   the holiday leg, otherwise to the ordinary one. */
+function settledFor(id,legs){
+  var out={};
+  picksOf(id).forEach(function(p){
+    if(!p.w)return;
+    for(var i=0;i<legs.length;i++){
+      var L=legs[i];
+      if(L.id!=='W'+p.w&&!(L.hol>=0&&L.week===p.w))continue;
+      var here=false;
+      L.teams.forEach(function(x){if(x.team===p.t)here=true;});
+      if(here){out[i]=p.t;break;}
+    }
+  });
+  return out;
+}
+
+function bestPath(legs,usedList,forceFirst,taken,penalty,settled){
   var used={};(usedList||[]).forEach(function(t){used[t]=1;});
+  /* A leg you have already picked is not a decision any more. Re-optimising it
+     produced a path that silently disagreed with the pick the owner had just
+     made, which is the opposite of a tool that tracks the season. */
+  settled=settled||{};
+  var openLegs=[],map=[];
+  legs.forEach(function(L,i){if(settled[i]==null){openLegs.push(L);map.push(i);}});
   /* every team that could still be played somewhere ahead */
   var teams=[],seen={};
-  legs.forEach(function(L){L.teams.forEach(function(p){
+  openLegs.forEach(function(L){L.teams.forEach(function(p){
     if(used[p.team]||seen[p.team])return;seen[p.team]=1;teams.push(p.team);});});
-  var n=legs.length,m=teams.length;
+  var n=openLegs.length,m=teams.length;
+  if(!n){   /* nothing left to decide */
+    var only=legs.map(function(L,i){
+      var t=settled[i],pk=null;
+      L.teams.forEach(function(x){if(x.team===t)pk=x;});
+      return {leg:L,team:t||null,wp:pk?pk.wp:null,opp:pk?pk.opp:null,
+              home:pk?pk.home:false,settled:true};});
+    return {rows:only,survive:1,feasible:true};
+  }
   if(!n||m<n)return null;         /* cannot field a legal team for every leg */
   var idx={};teams.forEach(function(t,k){idx[t]=k+1;});
   var cost=[];
   for(var i=0;i<=n;i++){cost.push(new Array(m+1).fill(BIG));}
-  legs.forEach(function(L,i){
+  openLegs.forEach(function(L,i){
     L.teams.forEach(function(p){
       var j=idx[p.team];
       if(!j)return;
       var wp=Math.min(0.999,Math.max(0.001,p.wp));
-      cost[i+1][j]=-Math.log(wp);
+      /* `taken` counts how many other entries already hold this team in this
+         leg. Charging for a collision is what pulls a portfolio apart: two
+         entries on one team share one result, so the second copy buys no
+         protection at all. */
+      var clash=(taken&&taken[map[i]+':'+p.team])||0;
+      cost[i+1][j]=-Math.log(wp)+clash*(penalty||0);
     });
   });
   /* Pin the first leg to a chosen team and let the solver find the best
@@ -643,17 +748,30 @@ function bestPath(legs,usedList,forceFirst){
     for(var jf=1;jf<=m;jf++){if(teams[jf-1]!==forceFirst)cost[1][jf]=BIG;}
   }
   var assign=hungarian(cost,n,m);
-  var out=[],logsum=0,ok=true;
+  var byLeg={},logsum=0,ok=true;
   for(var i2=1;i2<=n;i2++){
-    var j=assign[i2],L=legs[i2-1];
-    if(!j||cost[i2][j]>=BIG){out.push({leg:L,team:null,wp:null});ok=false;continue;}
+    var j=assign[i2],L=openLegs[i2-1],gi=map[i2-1];
+    if(!j||cost[i2][j]>=BIG){byLeg[gi]={leg:L,team:null,wp:null};ok=false;continue;}
     var team=teams[j-1],pick=null;
     L.teams.forEach(function(p){if(p.team===team)pick=p;});
-    logsum+=cost[i2][j];
-    out.push({leg:L,team:team,wp:pick?pick.wp:null,opp:pick?pick.opp:null,
-              home:pick?pick.home:false});
+    logsum+=-Math.log(Math.min(0.999,Math.max(0.001,pick?pick.wp:0.5)));
+    byLeg[gi]={leg:L,team:team,wp:pick?pick.wp:null,opp:pick?pick.opp:null,
+               home:pick?pick.home:false};
   }
-  return {rows:out,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,n):0,feasible:ok};
+  var out=legs.map(function(L,i){
+    if(settled[i]!=null){
+      var t=settled[i],pk=null;
+      L.teams.forEach(function(x){if(x.team===t)pk=x;});
+      return {leg:L,team:t,wp:pk?pk.wp:null,opp:pk?pk.opp:null,
+              home:pk?pk.home:false,settled:true};
+    }
+    return byLeg[i]||{leg:L,team:null,wp:null};
+  });
+  /* Survival is over the legs STILL TO PLAY. A leg already picked has either
+     been won or the entry is out, so folding its probability back in would
+     charge the owner twice for a game he has already survived. */
+  return {rows:out,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,n):0,
+          feasible:ok,open:n};
 }
 
 /* The greedy policy's path, worked out exactly rather than sampled.
@@ -664,12 +782,21 @@ function bestPath(legs,usedList,forceFirst){
    Monte Carlo estimate is useless here: surviving all twenty legs happens about
    twice in a thousand seasons, so at any sample size we can afford the noise is
    larger than the effect. */
-function greedyPath(legs,usedList){
+function greedyPath(legs,usedList,settled){
   var u={};(usedList||[]).forEach(function(t){u[t]=1;});
+  settled=settled||{};
   var res=RESERVE?reservationsFor(legs,u):{};
-  var rows=[],logsum=0,ok=true;
+  var rows=[],logsum=0,ok=true,open=0;
   for(var i=0;i<legs.length;i++){
     var L=legs[i],pick=null,j,p;
+    if(settled[i]!=null){
+      var st=settled[i],sp=null;
+      L.teams.forEach(function(x){if(x.team===st)sp=x;});
+      rows.push({leg:L,team:st,wp:sp?sp.wp:null,opp:sp?sp.opp:null,
+                 home:sp?sp.home:false,settled:true});
+      continue;
+    }
+    open++;
     for(j=0;j<L.teams.length;j++){
       p=L.teams[j];
       if(u[p.team])continue;
@@ -682,27 +809,90 @@ function greedyPath(legs,usedList){
     logsum+=-Math.log(Math.min(0.999,Math.max(0.001,pick.wp)));
     rows.push({leg:L,team:pick.team,wp:pick.wp,opp:pick.opp,home:pick.home});
   }
-  return {rows:rows,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,legs.length):0,
-          feasible:ok};
+  return {rows:rows,survive:ok?Math.exp(-logsum)*Math.pow(1-TIE_RATE,open):0,
+          feasible:ok,open:open};
 }
 
 var BPSTART=null;   /* team pinned to the first remaining leg, or null */
 function setBpStart(t){BPSTART=(t===BPSTART||t==='')?null:t;renderBestPath();}
+
+
+/* ================= PORTFOLIO OF PATHS =================
+   Ten entries running the same plan are worth one entry. They pick the same
+   team, that team loses, and all ten die on the same afternoon -- the simulator
+   now models exactly that, because entries picking the same team in the same
+   leg share the one result.
+
+   So the portfolio's job is not to maximise each entry. Each entry maximised
+   alone gives you ten copies of the same path. It is to maximise the chance
+   that AT LEAST ONE is still alive, which means deliberately putting entries on
+   different teams and accepting that most of them are then on worse teams.
+
+   The exact joint optimum is not separable and not worth chasing. Solving the
+   entries in turn, each one charged for every collision with the entries
+   already placed, is the standard practical answer and it is explainable, which
+   matters more here than the last fraction of a percent. */
+var CLASH=0.35;   /* cost of doubling up, in log-probability. Roughly the price
+                     of dropping from a 78% team to a 55% one. */
+
+function portfolioPaths(legs,ids){
+  var taken={},out=[];
+  ids.forEach(function(id){
+    var r=bestPath(legs,usedBy(id),null,taken,CLASH,settledFor(id,legs));
+    out.push({id:id,path:r});
+    if(r&&r.rows)r.rows.forEach(function(row,i){
+      if(row.team)taken[i+':'+row.team]=(taken[i+':'+row.team]||0)+1;});
+  });
+  return out;
+}
+
+/* Play a set of prescribed paths, sharing one result per game per season, and
+   report how often at least one entry is still standing. This is the only
+   honest way to score a portfolio: the whole effect being measured is the
+   correlation between entries, so it cannot be computed entry by entry. */
+function simulatePaths(paths,n){
+  var alive=null,rnd=mulberry32(7),survivors=0;
+  for(var s=0;s<n;s++){
+    var out={},best=-1;
+    for(var e=0;e<paths.length;e++){
+      var rows=paths[e]&&paths[e].path?paths[e].path.rows:null;
+      if(!rows)continue;
+      if(!alive)alive=new Array(rows.length).fill(0);
+      var died=-1;
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i];
+        if(!r.team){died=i;break;}
+        var key=i+':'+r.team,won;
+        if(key in out)won=out[key];
+        else{won=rnd()<Math.min(0.999,r.wp)*(1-TIE_RATE);out[key]=won;}
+        if(!won){died=i;break;}
+      }
+      var reach=(died<0)?rows.length:died;
+      if(reach>best)best=reach;
+    }
+    if(alive)for(var k=0;k<alive.length;k++){if(best>k)alive[k]++;}
+    if(alive&&best>=alive.length)survivors++;
+  }
+  return {alive:alive||[],n:n,all:survivors/n};
+}
 
 function renderBestPath(){
   var el=document.getElementById('bestpath');
   if(!el)return;
   if(!WEEKS.length||!aliveIds().length){el.innerHTML='';return;}
   var legs=buildLegs(),act=active();
-  var free=bestPath(legs,usedBy(act));
+  var settled=settledFor(act,legs);
+  var free=bestPath(legs,usedBy(act),null,null,null,settled);
+  var firstOpen=null;
+  for(var fi=0;fi<legs.length;fi++){if(settled[fi]==null){firstOpen=legs[fi];break;}}
   /* Every team you could open with, each followed by ITS best continuation.
      Ranked by where you end up, not by this week's win probability -- the
      whole point is that those two orders are not the same. */
   var usedAct={};usedBy(act).forEach(function(t){usedAct[t]=1;});
   var opts=[];
-  legs[0].teams.forEach(function(p){
+  if(firstOpen)firstOpen.teams.forEach(function(p){
     if(usedAct[p.team])return;
-    var r=bestPath(legs,usedBy(act),p.team);
+    var r=bestPath(legs,usedBy(act),p.team,null,null,settled);
     if(r&&r.feasible)opts.push({team:p.team,wp:p.wp,opp:p.opp,home:p.home,s:r.survive});
   });
   opts.sort(function(a,b){return b.s-a.s;});
@@ -728,11 +918,11 @@ function renderBestPath(){
     });
     startH+='</table></div>';
   }
-  var bp=BPSTART?bestPath(legs,usedBy(act),BPSTART):free;
+  var bp=BPSTART?bestPath(legs,usedBy(act),BPSTART,null,null,settled):free;
   if(!bp){el.innerHTML='<div class="empty">Not enough unused teams left to fill every '+
     'remaining leg &mdash; this entry cannot legally finish the season.</div>';return;}
   /* exact against exact -- see greedyPath */
-  var gp=greedyPath(legs,usedBy(act));
+  var gp=greedyPath(legs,usedBy(act),settled);
   var gs=gp?gp.survive:0;
   var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r.team;});
   var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
