@@ -376,6 +376,13 @@ check("the bar states the cost of a pick even when it is zero",
       "costs you nothing at either holiday leg" in sp.text)
 check("pick cost is measured by re-running without that pick, not by diffing "
       "whatever was last on screen", "omitTeam" in sp.text)
+# Holding ONE team per leg means burning a worse holiday team is free by the
+# policy's own arithmetic. That is only true if the held team's number never
+# moves, and it is a week-16 line. Depth in the pool must be counted and shown.
+check("holiday-pool depth is counted, not just the single best team",
+      "legDepth" in sp.text and "options left" in sp.text)
+check("spending a holiday team is never reported as simply free",
+      "but it was a holiday team" in sp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it

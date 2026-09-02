@@ -242,6 +242,16 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: HOLIDAY-POOL DEPTH is now counted and shown, after the owner
+  caught the tool calling CHI and BUF free in week 1 -- both play BOTH legs.
+  The reservation policy holds ONE team per leg (LA 68% Thx, PHI 55% Xmas), so
+  by its own arithmetic burning a worse holiday team costs nothing: you still
+  field PHI. That is only true if PHI's number never moves, and it is a WEEK 16
+  line, often off an estimate. Lose their QB in November and the held team is a
+  dog with no fallbacks, because they were spent in week 1. The panel and the
+  pinned bar now show options-left per leg (x of 10, y of 8), and spending a
+  holiday team is never reported as simply free -- it reads "does not change who
+  you field, but it was a holiday team -- 9 left of 10, 7 left of 8".
 - 2026-09-01: survivor page reordered -- Scenario Simulator now sits directly
   under the week board, above Entry Portfolio. Owner: "it seem very disjointed
   because i have to scroll too far from the entry to the sim."

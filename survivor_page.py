@@ -293,6 +293,9 @@ body{padding-bottom:4.2rem}
 .livebar .lbcost{flex:1;min-width:0;font-weight:800;font-size:.7rem;
   padding:.22rem .55rem;border-radius:999px;border:1px solid var(--line)}
 .livebar .lbcost.ok{color:var(--dim)}
+.livebar .lbcost.warn{color:var(--ink);
+  border-color:color-mix(in srgb,var(--down) 30%,var(--line));
+  background:color-mix(in srgb,var(--down) 8%,transparent)}
 .livebar .lbcost.bad{color:var(--down);
   border-color:color-mix(in srgb,var(--down) 45%,var(--line))}
 .livebar .bump{animation:lbflash .9s ease-out}
@@ -1183,6 +1186,19 @@ function renderSim(){
   var actId=active();
   var me=simulate(SIM_SEASONS,RESERVE,null,null,actId);
   var spent=usedBy(actId);
+  /* HOW MANY HOLIDAY TEAMS ARE LEFT, not just the best one.
+     The policy holds a single team per leg, so on its own arithmetic burning a
+     worse holiday team is free. That is only true if the held team's number
+     never moves -- and it is a week-16 line, often built off an estimate. Lose
+     Philadelphia's quarterback in November and the team you held is a dog and
+     the fallbacks are gone. Depth in an eight-team pool is worth something, so
+     it gets counted and shown. */
+  function legDepth(i){
+    var all=teamsInLeg(HOLIDAY_LEGS[i]),n=0;
+    all.forEach(function(t){if(spent.indexOf(t)<0)n++;});
+    return {left:n,of:all.length};
+  }
+  var depth=[legDepth(0),legDepth(1)];
   var iTm=iT,iXm=iX;
   var chips=spent.map(function(t){
     return '<span class="holdchip" style="background:'+tcol(t)+'">'+t+'</span>';}).join('');
@@ -1198,6 +1214,8 @@ function renderSim(){
         ' <small>with a '+em(0)+' team</small></span>'+
       '<span><i>reaches &#127876;</i> '+(iXm>0?pc(me.alive[iXm-1]/me.n):'--')+
         ' <small>with a '+em(1)+' team</small></span>'+
+      '<span><i>&#127860; options left</i> '+depth[0].left+' <small>of '+depth[0].of+'</small></span>'+
+      '<span><i>&#127876; options left</i> '+depth[1].left+' <small>of '+depth[1].of+'</small></span>'+
       '<span><i>runs the table</i> '+pc(me.alive[legs.length-1]/me.n)+'</span>'+
       '<span><i>typical exit</i> leg '+Math.round(me.avgReach)+'</span></div>';
   }
@@ -1213,7 +1231,8 @@ function renderSim(){
              t:iTm>0?Math.round(me.alive[iTm-1]/me.n*100):null,
              x:iXm>0?Math.round(me.alive[iXm-1]/me.n*100):null,
              ft:me.fielded[0]==null?null:Math.round(me.fielded[0]*100),
-             fx:me.fielded[1]==null?null:Math.round(me.fielded[1]*100)};
+             fx:me.fielded[1]==null?null:Math.round(me.fielded[1]*100),
+             dt:depth[0].left,dx:depth[1].left};
     var prev=(LASTBAR&&LASTBAR[actId])||{};
     function fl(k,html){
       return '<span class="lbstat'+(prev[k]!=null&&prev[k]!==now[k]?' bump':'')+'">'+html+'</span>';
@@ -1222,7 +1241,8 @@ function renderSim(){
       ' legs spent</small></span>';
     lb+=fl('ft','<i>&#127860; you would field</i><b>'+(now.ft==null?'--':now.ft+'%')+'</b>');
     lb+=fl('fx','<i>&#127876; you would field</i><b>'+(now.fx==null?'--':now.fx+'%')+'</b>');
-    lb+=fl('x','<i>reaches &#127876;</i><b>'+(now.x==null?'--':pc(me.alive[iXm-1]/me.n))+'</b>');
+    lb+=fl('dt','<i>&#127860; left</i><b>'+depth[0].left+'/'+depth[0].of+'</b>');
+    lb+=fl('dx','<i>&#127876; left</i><b>'+depth[1].left+'/'+depth[1].of+'</b>');
     /* Say what the last pick cost. A holiday-leg team you were not holding
        costs nothing, and silence about that is indistinguishable from a bug. */
     var verdict='';
@@ -1236,9 +1256,20 @@ function renderSim(){
           bits.push('&#127860; '+wt+'% &rarr; '+now.ft+'%');
         if(wx!=null&&now.fx!=null&&now.fx<wx)
           bits.push('&#127876; '+wx+'% &rarr; '+now.fx+'%');
-        verdict=bits.length
-          ?'<span class="lbcost bad">'+LASTPICK.t+' cost you '+bits.join(', ')+'</span>'
-          :'<span class="lbcost ok">'+LASTPICK.t+' costs you nothing at either holiday leg</span>';
+        /* A team can cost nothing today and still cost you depth, which is the
+           thing the single-team reservation cannot see. Say both. */
+        var legsOf=holidayLegsFor(LASTPICK.t);
+        if(bits.length){
+          verdict='<span class="lbcost bad">'+LASTPICK.t+' cost you '+bits.join(', ')+'</span>';
+        }else if(legsOf.length){
+          var d=legsOf.map(function(l){
+            var i=(l===HOLIDAY_LEGS[0])?0:1;
+            return l.emoji+' '+depth[i].left+' left of '+depth[i].of;}).join(', ');
+          verdict='<span class="lbcost warn">'+LASTPICK.t+' does not change who you field'+
+            ', but it was a holiday team &mdash; '+d+'</span>';
+        }else{
+          verdict='<span class="lbcost ok">'+LASTPICK.t+' costs you nothing at either holiday leg</span>';
+        }
       }
     }
     lb+=verdict||('<span class="lbspent">'+(spent.length?'spent: '+spent.join(' &middot; '):
