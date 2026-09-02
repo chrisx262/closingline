@@ -42,8 +42,10 @@ table.bp td{padding:.3rem .4rem;border-bottom:1px solid var(--line);font-size:.7
 table.bp td.n{text-align:right;font-variant-numeric:tabular-nums}
 table.bp td.bl{color:var(--dim);white-space:nowrap}
 table.bp tr.hol td.bl{color:var(--down);font-weight:900}
-table.bp td.gd{color:var(--down);font-weight:800;font-size:.68rem;white-space:nowrap}
-table.bp td.gd .gwp{font-variant-numeric:tabular-nums}
+table.bp td.gd{color:var(--ink);font-weight:700;font-size:.74rem;white-space:nowrap}
+table.bp td .gwp{color:var(--dim);font-weight:800;font-variant-numeric:tabular-nums;
+  margin-left:.15rem}
+table.bp td.bl{white-space:nowrap}
 table.bp td.gd .same{color:var(--dim);font-weight:700}
 .bphead small{display:block;color:var(--dim);font-size:.58rem;font-weight:700}
 table.bp.pp td.pc{text-align:center;padding:.22rem .25rem}
@@ -935,7 +937,10 @@ function renderBestPath(){
       ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b></span>'+
     '<span><i>greedy policy manages</i><b>'+pc(gs)+'</b></span>'+
     '<span><i>legs still estimated</i><b>'+est+' of '+legs.length+'</b></span></div>';
-  h+='<table class="bp"><tr><th>Leg</th><th>Take</th><th>Win%</th>'+
+  /* The win percentage now sits inside the cell for the game it belongs to.
+     As its own column, wedged between the two matchups, it read as though it
+     described the one on its right. */
+  h+='<table class="bp"><tr><th>Leg</th><th>Take</th>'+
      '<th title="what the simple best-team-available rule would spend on this leg">'+
      'Greedy would take</th></tr>';
   bp.rows.forEach(function(r,i){
@@ -945,9 +950,10 @@ function renderBestPath(){
        (r.team?('<span class="tchip" style="background:'+tcol(r.team)+
          ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+r.team+'</span> '+
          (r.home?'vs ':'at ')+r.opp+
-         (hl.length>1?' <span class="dbl" title="plays both holiday legs">&#9733;</span>':''))
+         (hl.length>1?' <span class="dbl" title="plays both holiday legs">&#9733;</span>':'')+
+         (r.wp==null?'':' <span class="gwp">'+Math.round(r.wp*100)+'%</span>'))
         :'<span style="color:var(--down)">no legal team</span>')+
-       '</td><td class="n">'+(r.wp==null?'&mdash;':Math.round(r.wp*100)+'%')+'</td>'+
+       '</td>'+
        /* Rendered as a chip like every other team on this page. As bare text
           "NO" reads as the word no, not New Orleans -- which is exactly how the
           owner read it. */
