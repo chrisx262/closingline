@@ -275,6 +275,43 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   padding:.35rem;border-radius:8px;border:1px solid var(--line);
   background:var(--panel);color:var(--ink)}
 .ecount-ctl .ehintsm{color:var(--dim);font-size:.72rem}
+/* scenario simulator */
+.simctl{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.8rem}
+.simctl button{font:inherit;font-weight:800;font-size:.72rem;padding:.4rem .8rem;
+  border-radius:999px;border:1px solid var(--line);background:var(--panel);
+  color:var(--ink);cursor:pointer}
+.simctl button.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.simctl .simnote{color:var(--dim);font-size:.68rem;font-weight:700}
+.simcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem;margin-bottom:.9rem}
+.simcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.7rem .85rem;box-shadow:var(--shadow)}
+.simcard .sclab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase}
+.simcard .scval{font-size:1.5rem;font-weight:900;line-height:1.15;margin-top:.15rem}
+.simcard .scsub{color:var(--dim);font-size:.66rem;font-weight:700}
+.simcard.warn .scval{color:var(--down)}
+.curve{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.85rem 1rem;box-shadow:var(--shadow);margin-bottom:.9rem;overflow-x:auto}
+.curve table{border-collapse:collapse;width:100%;min-width:520px}
+.curve td{padding:.16rem .3rem;font-size:.68rem;font-weight:700;vertical-align:middle}
+.curve td.cl{color:var(--dim);white-space:nowrap;width:9rem}
+.curve td.cv{text-align:right;width:3.2rem;font-variant-numeric:tabular-nums}
+.curve .bar{height:.62rem;border-radius:3px;background:var(--ink);display:block}
+.curve tr.hol td.cl{color:var(--down)}
+.curve tr.hol .bar{background:var(--down)}
+.cmp{width:100%;border-collapse:collapse}
+.cmp th{text-align:left;font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);padding:.3rem .4rem;border-bottom:1px solid var(--line)}
+.cmp td{padding:.34rem .4rem;border-bottom:1px solid var(--line);font-size:.74rem;font-weight:700}
+.cmp td.n{text-align:right;font-variant-numeric:tabular-nums}
+.cmp tr.best td{background:color-mix(in srgb,var(--up) 12%,transparent)}
+.cmp .delta.up{color:var(--up)}
+.cmp .delta.dn{color:var(--down)}
+.holdlist{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.holdchip{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;
+  padding:.2rem .6rem;font-size:.7rem;font-weight:900;color:#fff}
+.holdchip small{font-weight:700;opacity:.85}
+.simwarn{color:var(--dim);font-size:.68rem;font-weight:700;margin-top:.5rem;line-height:1.5}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -362,6 +399,27 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   <p class="subnote">Top available survival options each week, so you can save premium teams
   and keep unused teams for the holiday legs. Struck-through = already used by a live entry.</p>
   <div class="planwrap" id="planner"></div>
+</section>
+
+<section>
+  <h2>Scenario <em>Simulator</em></h2>
+  <p class="subnote">Plays out the rest of the season ten thousand times over, using your
+  actual entries and the teams you have already spent. Change anything above &mdash; use a
+  team, mark an entry out &mdash; and this rebuilds. Use it to compare two plans, not to
+  predict a week: the ordering is trustworthy, the exact percentages are not.</p>
+  <div class="simctl">
+    <button id="simReserve" class="on" onclick="toggleReserve()">Holding holiday teams back</button>
+    <span class="simnote" id="simstatus"></span>
+  </div>
+  <div class="simcards" id="simcards"></div>
+  <div id="simcurve"></div>
+  <h3 style="font-size:.95rem;margin:.2rem 0 .5rem">If you pick this now, what happens later?</h3>
+  <p class="subnote" style="margin-top:0">Each option re-runs the whole season with that team
+  spent here. The last two columns are the team you would still have for each holiday leg
+  &mdash; a red number is what taking this pick costs you there. Most picks cost nothing;
+  the ones that do are the decision.</p>
+  <div id="simcompare"></div>
+  <div id="simhold"></div>
 </section>
 
 <p class="footnote">
@@ -457,7 +515,7 @@ function saveEntries(e){localStorage.setItem(EK,JSON.stringify(e))}
 function active(){var a=localStorage.getItem(AK)||'1';
   if(isOut(a)){var al=aliveIds();if(al.length)return al[0];}
   return a;}
-function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner()}
+function setActive(n){localStorage.setItem(AK,String(n));renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();renderSim()}
 function usedBy(n){return picksOf(n).map(function(p){return p.t;})}
 /* only LIVE entries lock a team out of the planner -- a dead entry's history
    must not steer the entries that are still playing */
@@ -503,11 +561,11 @@ function useTeam(team,n){
   var hl=holidayLegsFor(team);
   toast(team+' → Entry '+n+(wk?' (week '+wk+')':'')+
         (hl.length?' — note: plays the '+hl.map(function(l){return l.name;}).join(' & '):''));
-  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
+  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();renderSim();
 }
 function dropTeam(team,n){
   var e=entries();e[n]=e[n].filter(function(p){return p.t!==team});saveEntries(e);
-  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();
+  renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();renderSim();
 }
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
   t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},1600)}
@@ -555,7 +613,7 @@ var LK='survivor_lean_v1';
 var LEAN=(function(){var v=parseFloat(localStorage.getItem(LK));return isNaN(v)?0.015:v;})();
 function setLean(v){LEAN=parseFloat(v);localStorage.setItem(LK,String(LEAN));
   document.getElementById('leanval').textContent=(LEAN>0?'+':'')+(LEAN*100).toFixed(1)+'%';
-  renderBoard();renderPortfolio();renderPlanner();}
+  renderBoard();renderPortfolio();renderPlanner();renderSim();}
 
 /* ---------- entry-count control ---------- */
 (function(){
@@ -576,7 +634,7 @@ function indexHol(weeksArr){
     if(g.home_wp!=null)HOLWP[g.away+'@'+g.home]={aw:g.away_wp,hw:g.home_wp};});});
 }
 async function load(){
-  var url=PREVIEW?'/data/survivor?season=2025&start_week=6&weeks=8':'/data/survivor?weeks=8';
+  var url=PREVIEW?'/data/survivor?season=2025&start_week=6&weeks=8':'/data/survivor?weeks=18';
   try{DATA=await (await fetch(url)).json();}catch(e){DATA={weeks:[]};}
   WEEKS=(DATA.weeks||[]).filter(function(w){return w.games&&w.games.length;});
   indexHol(DATA.weeks);
@@ -590,7 +648,7 @@ async function load(){
       .catch(function(){});
   });}
 }
-function renderAll(){renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();}
+function renderAll(){renderEntries();renderBoard();renderPortfolio();renderHolidays();renderPlanner();renderSim();}
 
 function renderHolidays(){
   var act=active(), used=usedBy(act), el=document.getElementById('holidays'), h='';
@@ -864,7 +922,8 @@ function renderPlanner(){
   var el=document.getElementById('planner');
   if(!WEEKS.length){el.innerHTML='<div class="empty" style="border:none">No schedule loaded.</div>';return;}
   var h='<table class="plan"><tr><th>Week</th><th>Top available survival picks</th></tr>';
-  WEEKS.forEach(function(w){
+  // Eight weeks keeps this readable. The simulator below reasons over all of them.
+  WEEKS.slice(0,8).forEach(function(w){
     var teams=weekTeams(w).filter(function(p){return !usedAny(p.team)||true;}).slice(0,6);
     var cells=teams.slice(0,5).map(function(p){var spent=usedAny(p.team);
       return '<span class="ptop'+(spent?' spent':'')+'"><span class="tchip" style="background:'+tcol(p.team)+
@@ -873,6 +932,273 @@ function renderPlanner(){
     h+='<tr><td class="wk">Wk '+w.week+'</td><td>'+(cells||'<span style="color:var(--dim)">lines pending</span>')+'</td></tr>';
   });
   el.innerHTML=h+'</table>';
+}
+
+
+/* ================= SCENARIO SIMULATOR =================
+   Plays the rest of the season out many times and counts how often at least one
+   of your entries is still standing.
+
+   WHY SIMULATE AT ALL. For a single entry you do not need to: survival is just
+   the win probabilities multiplied together. It earns its keep on several
+   entries, where the question is not "does this entry live" but "does ANY of
+   them live", and that depends on how the entries overlap.
+
+   A CIRCA SEASON IS 20 LEGS, NOT 18 WEEKS. Weeks 1-18, plus a Thanksgiving and
+   a Christmas leg drawn from those days' games. Each leg needs its own team you
+   have never used, so weeks 12 and 16 ask you for two different teams: one from
+   the holiday games and one from the rest of that week. That is the whole
+   squeeze -- 20 teams out of 32, and two of them have to come from small pools.
+
+   WHAT THE POLICY DOES. Each leg it takes the best team still legal to it,
+   except that teams it is holding for a holiday leg are off limits until that
+   leg arrives. That is deliberately a simple rule. It is not meant to be the
+   best strategy available; it is meant to be a consistent one, so that when you
+   compare two of your own choices the difference you see comes from the choice
+   and not from the policy wandering.
+
+   READ THE ORDERING, NOT THE NUMBER. Backtesting 2025 showed our win
+   probabilities run about 11 points optimistic in the 60-70 band, so a
+   percentage here is not to be trusted at face value and is never shown to
+   decimals. Which option beats which is far more robust than by how much. */
+
+var TIE_RATE=0.0035;      /* NFL ties run about 1 game in 285, and a tie ends a
+                             Circa entry outright. Small per leg, not small
+                             across twenty of them. */
+var SIM_SEASONS=10000, SIM_COMPARE=1500, RESERVE=true;
+
+/* Seeded so the same board always gives the same answer -- if a number moves,
+   it moved because you changed something, not because the dice rolled again. */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296;};}
+
+function gamePair(p){return p.home?[p.opp,p.team]:[p.team,p.opp];}
+function legIndexFor(wk){return wk===12?0:(wk===16?1:-1);}
+function isLegGame(wk,p){
+  var i=legIndexFor(wk);if(i<0)return false;
+  var pr=gamePair(p),gs=HOLIDAY_LEGS[i].games;
+  for(var k=0;k<gs.length;k++){if(gs[k][0]===pr[0]&&gs[k][1]===pr[1])return true;}
+  return false;
+}
+/* Split each week into its legs. The holiday game is played before the rest of
+   that week, so it goes first. */
+function buildLegs(){
+  var legs=[];
+  WEEKS.forEach(function(w){
+    var all=weekTeams(w),li=legIndexFor(w.week);
+    if(li<0){legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:all});return;}
+    var hol=[],rest=[];
+    all.forEach(function(p){(isLegGame(w.week,p)?hol:rest).push(p);});
+    if(hol.length)legs.push({id:'H'+li,hol:li,teams:hol,
+      label:HOLIDAY_LEGS[li].emoji+' '+HOLIDAY_LEGS[li].name});
+    if(rest.length)legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:rest});
+  });
+  return legs;
+}
+/* Which team to hold for which holiday leg. Scarcest leg picks first: Christmas
+   offers eight teams to Thanksgiving's ten, so it gets first refusal, otherwise
+   a team good at both gets spent on the easier one. */
+function reservationsFor(legs,used){
+  var res={},taken={},hol=[];
+  legs.forEach(function(L){if(L.hol>=0)hol.push(L);});
+  hol.sort(function(a,b){return a.teams.length-b.teams.length;});
+  hol.forEach(function(L){
+    for(var i=0;i<L.teams.length;i++){
+      var t=L.teams[i].team;
+      if(used[t]||taken[t])continue;
+      res[t]=L.id;taken[t]=1;return;
+    }
+  });
+  return res;
+}
+/* One entry, one season. Returns the leg index it died at, or -1 if it ran the
+   table. Dying "for lack of a legal team" is a real Circa outcome and is
+   counted as death, not skipped. */
+function runEntry(legs,used,res,rnd,forceTeam,rec){
+  var u={},k,i,j,p;
+  for(k in used)u[k]=1;
+  for(i=0;i<legs.length;i++){
+    var L=legs[i],pick=null;
+    if(i===0&&forceTeam){
+      for(j=0;j<L.teams.length;j++){if(L.teams[j].team===forceTeam){pick=L.teams[j];break;}}
+    }
+    if(!pick){for(j=0;j<L.teams.length;j++){
+      p=L.teams[j];
+      if(u[p.team])continue;
+      if(res[p.team]&&res[p.team]!==L.id)continue;
+      pick=p;break;}}
+    if(!pick){for(j=0;j<L.teams.length;j++){p=L.teams[j];if(!u[p.team]){pick=p;break;}}}
+    if(!pick)return i;
+    /* Reaching a holiday leg with a good team left is the entire point of
+       holding one back, so record what we actually field there. Recorded
+       before the coin flip: fielding it and winning with it are different
+       questions and only the first one is about reservation. */
+    if(rec&&L.hol>=0){rec.n[L.hol]++;rec.sum[L.hol]+=pick.wp;}
+    u[pick.team]=1;
+    if(rnd()>=pick.wp*(1-TIE_RATE))return i;
+  }
+  return -1;
+}
+function simulate(n,reserve,forceTeam,forceEntry){
+  var legs=buildLegs();
+  if(!legs.length)return null;
+  var ids=aliveIds();
+  if(!ids.length)return null;
+  var pre=ids.map(function(id){
+    var u={};usedBy(id).forEach(function(t){u[t]=1;});
+    return {id:id,used:u,res:reserve?reservationsFor(legs,u):{}};
+  });
+  var alive=[],i;
+  for(i=0;i<legs.length;i++)alive.push(0);
+  var rnd=mulberry32(2026),reachSum=0;
+  var rec={n:[0,0],sum:[0,0]};
+  for(var s=0;s<n;s++){
+    var best=-1;
+    for(var e=0;e<pre.length;e++){
+      var ft=(forceTeam&&pre[e].id===forceEntry)?forceTeam:null;
+      var d=runEntry(legs,pre[e].used,pre[e].res,rnd,ft,rec);
+      var reach=(d<0)?legs.length:d;
+      if(reach>best)best=reach;
+    }
+    for(i=0;i<legs.length;i++){if(best>i)alive[i]++;}
+    reachSum+=best;
+  }
+  /* Mean win probability of the team fielded at each holiday leg, over the
+     entries that got there. This is the number reservation actually moves --
+     unconditional survival barely budges, because most seasons are over before
+     Thanksgiving, and quoting that would say holdbacks do not matter when what
+     it really says is that you probably will not get to find out. */
+  var fielded=[rec.n[0]?rec.sum[0]/rec.n[0]:null, rec.n[1]?rec.sum[1]/rec.n[1]:null];
+  return {legs:legs,alive:alive,n:n,avgReach:reachSum/n,entries:pre.length,
+          fielded:fielded,reached:rec.n};
+}
+function legIdx(legs,id){for(var i=0;i<legs.length;i++){if(legs[i].id===id)return i;}return -1;}
+/* Rounded to whole points on purpose -- our probabilities are not accurate
+   enough to justify a decimal. But a real chance must never round to a flat 0%:
+   running the table is genuinely rare, and "0%" reads as impossible when the
+   honest answer is "unlikely". */
+function pc(x){
+  if(x>0&&x<0.005)return '<1%';
+  if(x<1&&x>0.995)return '>99%';
+  return Math.round(x*100)+'%';
+}
+
+function toggleReserve(){
+  RESERVE=!RESERVE;
+  var b=document.getElementById('simReserve');
+  b.className=RESERVE?'on':'';
+  b.textContent=RESERVE?'Holding holiday teams back':'Spending freely, no holdbacks';
+  renderSim();
+}
+
+function renderSim(){
+  var cards=document.getElementById('simcards'),curve=document.getElementById('simcurve'),
+      cmp=document.getElementById('simcompare'),hold=document.getElementById('simhold'),
+      st=document.getElementById('simstatus');
+  if(!WEEKS.length||!aliveIds().length){
+    cards.innerHTML='<div class="empty" style="grid-column:1/-1">Nothing to simulate yet.</div>';
+    curve.innerHTML='';cmp.innerHTML='';hold.innerHTML='';st.textContent='';return;
+  }
+  var t0=(window.performance&&performance.now)?performance.now():0;
+  var r=simulate(SIM_SEASONS,RESERVE,null,null);
+  if(!r){cards.innerHTML='';curve.innerHTML='';cmp.innerHTML='';hold.innerHTML='';return;}
+  var legs=r.legs,last=legs.length-1;
+  var iT=legIdx(legs,'H0'),iX=legIdx(legs,'H1');
+  var other=simulate(2500,!RESERVE,null,null);
+
+  /* headline numbers */
+  var cardsH='';
+  function card(lab,val,sub,warn){
+    return '<div class="simcard'+(warn?' warn':'')+'"><div class="sclab">'+lab+'</div>'+
+      '<div class="scval">'+val+'</div><div class="scsub">'+sub+'</div></div>';
+  }
+  function fld(i){return r.fielded[i]==null?'no entry gets there':
+    'you field a '+Math.round(r.fielded[i]*100)+'% team there';}
+  cardsH+=card('Any entry reaches Thanksgiving',iT>=0?pc(r.alive[iT-1>=0?iT-1:0]/r.n):'--',
+    iT>=0?fld(0):'not in range');
+  cardsH+=card('Any entry reaches Christmas',iX>=0?pc(r.alive[iX-1>=0?iX-1:0]/r.n):'--',
+    iX>=0?fld(1):'not in range',true);
+  cardsH+=card('Any entry runs the table',pc(r.alive[last]/r.n),
+    r.entries+(r.entries===1?' entry':' entries')+', all '+legs.length+' legs');
+  cardsH+=card('Typical furthest entry','leg '+Math.round(r.avgReach),
+    'of '+legs.length+' -- most seasons end early');
+  cards.innerHTML=cardsH;
+
+  /* Compare holdbacks on the team you FIELD at the holiday legs, not on whether
+     you survive to them. Survival barely moves either way because most seasons
+     are over by November, and reporting that would say holdbacks are pointless
+     when what it really says is you probably will not get to find out. */
+  var dx=(other&&r.fielded[1]!=null&&other.fielded[1]!=null)
+    ?(r.fielded[1]-other.fielded[1]):null;
+  st.textContent=(dx===null)?'':
+    (RESERVE?'Holding back leaves you ':'Holding back would leave you ')+
+    (dx>=0?'+':'')+Math.round(dx*100)+' points better at Christmas'+
+    (dx<0?' -- it is costing you here':'')+'.';
+
+  /* survival curve */
+  var ch='<div class="curve"><table>';
+  legs.forEach(function(L,i){
+    var v=r.alive[i]/r.n;
+    ch+='<tr class="'+(L.hol>=0?'hol':'')+'"><td class="cl">'+L.label+'</td>'+
+        '<td><span class="bar" style="width:'+Math.max(1,v*100)+'%"></span></td>'+
+        '<td class="cv">'+pc(v)+'</td></tr>';
+  });
+  curve.innerHTML=ch+'</table></div>';
+
+  /* this leg's options, each re-simulated */
+  var act=active(),usedAct={};usedBy(act).forEach(function(t){usedAct[t]=1;});
+  var L0=legs[0];
+  var cands=L0.teams.filter(function(p){return !usedAct[p.team];}).slice(0,8);
+  var rows=cands.map(function(p){
+    var sr=simulate(SIM_COMPARE,RESERVE,p.team,act);
+    return {team:p.team,opp:p.opp,home:p.home,wp:p.wp,src:p.src,
+            f0:sr?sr.fielded[0]:null,f1:sr?sr.fielded[1]:null};
+  });
+  /* Best this leg first. The holiday columns are the cost of taking it. */
+  rows.sort(function(a,b){return b.wp-a.wp;});
+  var base={f0:r.fielded[0],f1:r.fielded[1]};
+  var th='<table class="cmp"><tr><th>Pick now (entry '+act+')</th><th>This leg</th>'+
+         '<th>Left for &#127860;</th><th>Left for &#127876;</th></tr>';
+  function costCell(v,ref){
+    if(v==null)return '<td class="n">--</td>';
+    var d=(ref==null)?0:(v-ref),s=Math.round(d*100);
+    return '<td class="n">'+Math.round(v*100)+'%'+
+      (s<0?' <span class="delta dn">'+s+'</span>':'')+'</td>';
+  }
+  rows.forEach(function(o,i){
+    var hl=holidayLegsFor(o.team);
+    var mark=hl.length?' <span title="plays a holiday leg">'+
+      hl.map(function(l){return l.emoji;}).join('')+'</span>':'';
+    var free=(o.f0==null||base.f0==null||o.f0>=base.f0-0.005)&&
+             (o.f1==null||base.f1==null||o.f1>=base.f1-0.005);
+    th+='<tr class="'+(i===0&&free?'best':'')+'"><td>'+
+      '<span class="tchip" style="background:'+tcol(o.team)+
+      ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+o.team+'</span> '+
+      (o.home?'vs ':'at ')+o.opp+mark+'</td>'+
+      '<td class="n">'+Math.round(o.wp*100)+'%</td>'+
+      costCell(o.f0,base.f0)+costCell(o.f1,base.f1)+'</tr>';
+  });
+  cmp.innerHTML=(rows.length?th+'</table>':'<div class="empty">No legal team left for this entry.</div>');
+
+  /* what the policy is holding, and why */
+  var res=reservationsFor(legs,usedAct),chips='';
+  Object.keys(res).forEach(function(t){
+    var L=legs[legIdx(legs,res[t])];
+    var me=null;L.teams.forEach(function(p){if(p.team===t)me=p;});
+    chips+='<span class="holdchip" style="background:'+tcol(t)+'">'+t+
+      ' <small>'+(L.hol===0?'Thanksgiving':'Christmas')+
+      (me?' '+Math.round(me.wp*100)+'%':'')+'</small></span>';
+  });
+  var t1=(window.performance&&performance.now)?performance.now():0;
+  hold.innerHTML='<h3 style="font-size:.95rem;margin:1rem 0 .3rem">Do not spend these'+
+    ' (entry '+act+')</h3><div class="holdlist">'+
+    (chips||'<span class="simnote">Nothing left to hold -- both holiday pools are spent.</span>')+
+    '</div><div class="simwarn">Percentages are rounded hard on purpose. Against real 2025'+
+    ' results our win probabilities ran about 11 points optimistic in the 60-70 band, so'+
+    ' treat these as a ranking of your options rather than a forecast. Weeks the market has'+
+    ' not priced yet use an estimate, and firm up as lines post.'+
+    (t0?' Ran '+(SIM_SEASONS/1000)+'k seasons in '+Math.round(t1-t0)+' ms.':'')+'</div>';
 }
 
 /* ---------- countdown ---------- */

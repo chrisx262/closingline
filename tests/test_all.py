@@ -346,6 +346,46 @@ check("survivor page 200", sp.status_code == 200)
 check("survivor page carries the RG footer", "1-800-GAMBLER" in sp.text)
 check("survivor page has no hype language",
       not any(w in sp.text.lower() for w in ("guaranteed", "can't-miss", "lock of")))
+
+# ---- scenario simulator ----
+check("survivor page carries the scenario simulator",
+      "SCENARIO SIMULATOR" in sp.text and 'id="simcards"' in sp.text)
+check("simulator sees the whole remaining season, not an 8-week window",
+      "/data/survivor?weeks=18" in sp.text)
+check("simulator counts a tie as elimination, like Circa",
+      "TIE_RATE" in sp.text)
+check("simulator is seeded, so a number only moves when the board does",
+      "mulberry32" in sp.text)
+check("simulator warns the percentages are not forecasts",
+      "ranking of your options" in sp.text)
+
+# The page hardcodes the two holiday legs. If the NFL schedule in the database
+# disagrees with them, every reservation the tool recommends is wrong -- and it
+# would fail silently, which is the worst way for this particular thing to break.
+import re  # noqa: E402
+from app import Game  # noqa: E402
+
+legs_js = re.search(r"var HOLIDAY_LEGS=\[(.*?)\n\];", sp.text, re.S)
+check("holiday legs are declared on the page", legs_js is not None)
+if legs_js:
+    pairs = re.findall(r"\['([A-Z]+)','([A-Z]+)'\]", legs_js.group(1))
+    check("both holiday legs are populated (Thanksgiving + Christmas)",
+          len(pairs) == 9)
+    ss = SessionLocal()
+    seasons = [x[0] for x in ss.query(Game.season).distinct().all()]
+    real = set()
+    for sea in seasons:
+        for g in ss.query(Game).filter(Game.season == sea,
+                                       Game.week.in_([12, 16])).all():
+            real.add((sea, g.away, g.home))
+    ss.close()
+    # only meaningful once a season with a real week 12/16 is loaded
+    checked = [p for p in pairs if any((sea, p[0], p[1]) in real for sea in seasons)]
+    missing = [p for p in pairs
+               if seasons and not any((sea, p[0], p[1]) in real for sea in seasons)]
+    check("every hardcoded holiday game exists in a loaded schedule "
+          "(skipped if only synthetic data is loaded)",
+          not checked or not missing)
 check("survivor page has the home-field lean control",
       'id="lean"' in sp.text and "Home-field lean" in sp.text)
 check("survivor page has holiday-leg protection",

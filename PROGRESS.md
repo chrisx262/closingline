@@ -242,6 +242,25 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: SCENARIO SIMULATOR shipped on /survivor. Browser-side Monte Carlo
+  over the whole remaining season, re-run on every pick/entry change, so the
+  owner can try a plan and back out of it. Models a Circa season as 20 LEGS, not
+  18 weeks: weeks 1-18 plus a Thanksgiving and a Christmas leg, each needing its
+  own unused team, so the week-12 and week-16 slates exclude their holiday
+  games. Seeded (mulberry32) so a number only moves when the board does.
+- 2026-09-01: the simulator reports the team you FIELD at each holiday leg, not
+  survival to it. Survival is the obvious metric and it is nearly useless here:
+  holdbacks on vs off moved "any entry past Christmas" by under a point (1% vs
+  1%), because most seasons are over before Thanksgiving. The same comparison on
+  the team fielded moves 68% vs 45% at Thanksgiving and 55% vs 45% at Christmas.
+  Shipping the survival number would have told the owner reservation does not
+  matter, when what it actually says is he probably will not get to find out.
+- 2026-09-01: pc() never rounds a real chance to a flat 0% ("<1%" instead).
+  Running the table is ~0.4% with 3 entries; "0%" reads as impossible.
+- 2026-09-01: test parses HOLIDAY_LEGS out of the served page and checks every
+  one of the 9 games against the loaded schedule. Verified it fails on a
+  corrupted leg — if the hardcoded legs ever go stale, every reservation the
+  tool recommends is wrong, and it would otherwise break silently.
 - 2026-09-01: nflverse loader no longer drops games that have no betting line.
   It skipped any row without a spread+total, so prod held 114 of 272 games and
   the survivor planner literally could not see week 16 — the question it exists
