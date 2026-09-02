@@ -1110,6 +1110,40 @@ def slate(week: int, season: Optional[int] = None, s: Session = Depends(db)):
     return [_game_ctx(s, g) for g in q.order_by(Game.kickoff)]
 
 
+# Power-rating priors for the weeks books have not posted lines for yet.
+# Cached per (season, number of priced games) so the fit is recomputed only when
+# a new line actually lands, which is what invalidates it.
+_PRIOR_CACHE: dict = {}
+
+
+def season_priors(s: Session, season: int):
+    """(ratings, home_field, n_priced) fitted to this season's real spreads.
+
+    Fitted to market lines, never to our own model, and only ever used where no
+    line exists -- see systems/power_ratings.py. Not an anti-lookahead concern
+    (invariant 3): this endpoint plans future weeks and prices nothing. Picks
+    are still priced from snapshots, which remain as_of-bound.
+
+    Known limitation: mid-season this blends lines posted in week 1 with lines
+    posted this morning, so it lags a team whose strength has genuinely moved.
+    Re-fitting on every new line limits the damage, and any week with a real
+    line ignores the prior entirely.
+    """
+    from systems.power_ratings import fit
+
+    priced = (s.query(Game.home, Game.away, OddsSnapshot.spread_home_line)
+                .join(OddsSnapshot, OddsSnapshot.game_id == Game.id)
+                .filter(Game.season == season,
+                        OddsSnapshot.spread_home_line.isnot(None))
+                .distinct().all())
+    key = (season, len(priced))
+    if key not in _PRIOR_CACHE:
+        ratings, hfa = fit(priced)
+        _PRIOR_CACHE.clear()          # only ever one season in flight
+        _PRIOR_CACHE[key] = (ratings, hfa, len(priced))
+    return _PRIOR_CACHE[key]
+
+
 @app.get("/data/survivor")
 def survivor_data(weeks: int = 8, season: Optional[int] = None,
                   start_week: Optional[int] = None, s: Session = Depends(db)):
@@ -1129,8 +1163,12 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
     if start_week is None:
         start_week = anchor.week if anchor else 1
 
+    from systems.power_ratings import projected_spread
+
     out_weeks = []
+    ratings, hfa, n_priced = ({}, 0.0, 0)
     if season is not None:
+        ratings, hfa, n_priced = season_priors(s, season)
         for wk in range(start_week, start_week + weeks):
             games = (s.query(Game).filter(Game.season == season, Game.week == wk)
                        .order_by(Game.kickoff).all())
@@ -1138,10 +1176,18 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
             for g in games:
                 snap = closing_snapshot(s, g)
                 home_wp, src = None, None
+                spread = snap.spread_home_line if snap else None
                 if snap and snap.ml_home is not None and snap.ml_away is not None:
                     home_wp, src = devig_two_way(snap.ml_home, snap.ml_away), "ml"
                 elif snap and snap.spread_home_line is not None:
                     home_wp, src = wp_from_spread(snap.spread_home_line), "spread"
+                else:
+                    # Nobody has priced this game yet. Stand a power rating in
+                    # and SAY SO -- a caller that cannot tell an estimate from a
+                    # market price will quietly trust the wrong one.
+                    spread = projected_spread(ratings, hfa, g.home, g.away)
+                    if spread is not None:
+                        home_wp, src = wp_from_spread(spread), "prior"
                 away_wp = round(1 - home_wp, 4) if home_wp is not None else None
                 rows.append({
                     "game_id": g.id, "week": wk, "kickoff": g.kickoff.isoformat(),
@@ -1149,9 +1195,17 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
                     "home_score": g.home_score, "away_score": g.away_score,
                     "home_wp": round(home_wp, 4) if home_wp is not None else None,
                     "away_wp": away_wp, "wp_source": src,
-                    "spread_home": snap.spread_home_line if snap else None})
+                    "spread_home": round(spread, 1) if spread is not None else None})
             out_weeks.append({"week": wk, "games": rows})
-    return {"season": season, "start_week": start_week, "weeks": out_weeks}
+    return {"season": season, "start_week": start_week, "weeks": out_weeks,
+            "prior": {
+                "fitted_from_games": n_priced,
+                "home_field": round(hfa, 2),
+                "note": ("Games no book has priced yet carry wp_source "
+                         "'prior': a power rating fitted to this season's real "
+                         "spreads, not a market price. Treat it as a ranking, "
+                         "not a number to bet into."),
+            }}
 
 
 @app.get("/data/trends")

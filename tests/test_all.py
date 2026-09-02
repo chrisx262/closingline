@@ -300,8 +300,46 @@ check("survivor win probs are valid probabilities",
       all(0 <= g["home_wp"] <= 1 for g in wps))
 check("survivor home_wp + away_wp == 1",
       all(abs(g["home_wp"] + g["away_wp"] - 1.0) < 1e-6 for g in wps))
-check("survivor respects as_of (no future snapshot leak) via closing_snapshot",
-      all(g["wp_source"] in ("ml", "spread") for g in wps))
+check("survivor labels every win prob with where it came from",
+      all(g["wp_source"] in ("ml", "spread", "prior") for g in wps))
+
+# ---- power-rating priors: the weeks no book has priced yet ----
+from systems.power_ratings import fit, projected_spread, HFA_DEFAULT  # noqa: E402
+
+# A league we know the answer to: A is 7 points better than B, B 7 better
+# than C, home field exactly 2. Every pairing played home and away, priced
+# with no noise, so a correct fit has to recover the gaps exactly.
+TRUE = {"A": 7.0, "B": 0.0, "C": -7.0}
+synth = [(h, a, -((TRUE[h] - TRUE[a]) + 2.0))
+         for h in TRUE for a in TRUE if h != a]
+R, H = fit(synth)
+check("ratings recover known gaps", abs((R["A"] - R["C"]) - 14.0) < 0.3)
+check("ratings recover known home field", abs(H - 2.0) < 0.2)
+check("ratings are centred on the league average",
+      abs(sum(R.values()) / len(R)) < 1e-6)
+check("ratings do not collapse toward a coin flip",
+      (max(R.values()) - min(R.values())) > 12.0)
+check("projected spread favours the better team at home",
+      projected_spread(R, H, "A", "C") < 0)
+check("projected spread flips with venue",
+      projected_spread(R, H, "A", "C") < projected_spread(R, H, "C", "A"))
+check("projected spread is None for a team we never priced",
+      projected_spread(R, H, "A", "ZZ") is None)
+check("no lines at all -> default home field, no crash",
+      fit([])[1] == HFA_DEFAULT)
+
+full = c.get("/data/survivor?weeks=18").json()
+allg = [g for w in full["weeks"] for g in w["games"]]
+check("prior fills every unpriced game (no blanks left)",
+      all(g["home_wp"] is not None for g in allg))
+check("a real market price is never replaced by a prior",
+      all(g["wp_source"] != "prior"
+          for g in allg if g["spread_home"] is not None
+          and g["wp_source"] in ("ml", "spread")))
+check("response says how the prior was built",
+      "fitted_from_games" in full.get("prior", {}))
+check("prior note warns it is not a market price",
+      "not a market price" in full.get("prior", {}).get("note", ""))
 
 sp = c.get("/survivor")
 check("survivor page 200", sp.status_code == 200)

@@ -242,6 +242,25 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: nflverse loader no longer drops games that have no betting line.
+  It skipped any row without a spread+total, so prod held 114 of 272 games and
+  the survivor planner literally could not see week 16 — the question it exists
+  to answer. Schedule row now always loads; a snapshot is created only where a
+  real line exists, so an unpriced week stays visibly unpriced.
+- 2026-09-01: `--wipe` is opt-in on the nflverse loader CLI. It was the default,
+  one argument from dropping every table, including the purchased 2025 openers.
+- 2026-09-01: unpriced games get a POWER-RATING PRIOR, tagged wp_source
+  "prior" (systems/power_ratings.py). Fitted to THIS season's real market
+  spreads — not last season's results — so it reflects the current roster.
+  Ridge picked by 6-fold CV on held-out lines, NOT by intuition: the intuition
+  was wrong. Shrinking hard is right when fitting to noisy game results, but
+  these are lines, which the market has already regressed; shrinking again drove
+  held-out error from 0.66 to 2.36 pts and squashed the best-to-worst spread
+  from a realistic 13 pts to 7, biasing every projection toward a coin flip —
+  the exact direction that makes a survivor tool understate the best available
+  team. RIDGE is now 0.1, kept non-zero only as insurance for a thin slate.
+  Fitted home field lands at 1.5 pts, which is the real NFL number and was not
+  handed to it. A real line ALWAYS wins; the prior only fills gaps.
 - 2026-07-12: season preload moved from Docker build to boot.py runtime
   (build-time seeding landed in throwaway sqlite, never in Postgres).
 - 2026-07-12: boot seeds per-season [2025, 2026] — odds matching needs the
