@@ -242,6 +242,15 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-02: third column on the best-path table, "Holiday teams held" -- the
+  best path if no holiday-leg team may be spent before its own holiday leg
+  (free from that leg onward; a both-legs team is therefore locked only until
+  Thanksgiving, since spending it there is what uses it up). Owner's request.
+  RESULT: the blanket rule is expensive. 0.064% against the unrestricted
+  0.167%, roughly two and a half times worse, and worse than greedy's 0.105%.
+  Holding ONE team per leg (the simulator's reservation policy) captures the
+  protection; holding all twelve throws away far more than it saves. Useful
+  precisely because it shows a plausible rule is a bad one.
 - 2026-09-02: verified the mid-season case end to end on a synthetic week-4
   state (weeks 1-3 marked final). The feed anchors at week 4, settled picks hold,
   and a season-long injury re-solves properly: dropping MIN by 22 points across

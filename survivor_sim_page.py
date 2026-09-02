@@ -42,7 +42,9 @@ table.bp td{padding:.3rem .4rem;border-bottom:1px solid var(--line);font-size:.7
 table.bp td.n{text-align:right;font-variant-numeric:tabular-nums}
 table.bp td.bl{color:var(--dim);white-space:nowrap}
 table.bp tr.hol td.bl{color:var(--down);font-weight:900}
-table.bp td.gd{color:var(--ink);font-weight:700;font-size:.74rem;white-space:nowrap}
+table.bp td.gd,table.bp td.hp{color:var(--ink);font-weight:700;font-size:.74rem;
+  white-space:nowrap}
+table.bp td.hp{border-left:1px solid var(--line)}
 table.bp td .gwp{color:var(--dim);font-weight:800;font-variant-numeric:tabular-nums;
   margin-left:.15rem}
 table.bp td.bl{white-space:nowrap}
@@ -705,7 +707,20 @@ function settledFor(id,legs){
   return out;
 }
 
-function bestPath(legs,usedList,forceFirst,taken,penalty,settled){
+/* Leg index of the FIRST holiday leg each team appears in. A team locked under
+   the protect rule is unavailable until that leg and free from it onward; one
+   that plays both is therefore locked only until Thanksgiving, since using it
+   there is what spends it. */
+function firstHolidayLeg(legs){
+  var out={};
+  legs.forEach(function(L,i){
+    if(L.hol<0)return;
+    L.teams.forEach(function(p){if(out[p.team]==null)out[p.team]=i;});
+  });
+  return out;
+}
+
+function bestPath(legs,usedList,forceFirst,taken,penalty,settled,protect){
   var used={};(usedList||[]).forEach(function(t){used[t]=1;});
   /* A leg you have already picked is not a decision any more. Re-optimising it
      produced a path that silently disagreed with the pick the owner had just
@@ -740,7 +755,12 @@ function bestPath(legs,usedList,forceFirst,taken,penalty,settled){
          entries on one team share one result, so the second copy buys no
          protection at all. */
       var clash=(taken&&taken[map[i]+':'+p.team])||0;
-      cost[i+1][j]=-Math.log(wp)+clash*(penalty||0);
+      /* protect: a holiday team cannot be spent before its own holiday leg */
+      if(protect&&protect[p.team]!=null&&map[i]<protect[p.team]){
+        cost[i+1][j]=BIG;
+      }else{
+        cost[i+1][j]=-Math.log(wp)+clash*(penalty||0);
+      }
     });
   });
   /* Pin the first leg to a chosen team and let the solver find the best
@@ -923,6 +943,10 @@ function renderBestPath(){
     startH+='</table></div>';
   }
   var bp=BPSTART?bestPath(legs,usedBy(act),BPSTART,null,null,settled):free;
+  /* Third strategy: never spend a holiday team before its holiday. */
+  var prot=firstHolidayLeg(legs);
+  var hp=bestPath(legs,usedBy(act),BPSTART,null,null,settled,prot);
+  var hmap={};if(hp&&hp.rows)hp.rows.forEach(function(r,i){hmap[i]=r;});
   if(!bp){el.innerHTML='<div class="empty">Not enough unused teams left to fill every '+
     'remaining leg &mdash; this entry cannot legally finish the season.</div>';return;}
   /* exact against exact -- see greedyPath */
@@ -934,15 +958,23 @@ function renderBestPath(){
   var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
   var h='<div class="bpwrap">'+startH+'<div class="bphead">'+
     '<span><i>'+(BPSTART?('path if you open with '+BPSTART):'best path')+
-      ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b></span>'+
-    '<span><i>greedy policy manages</i><b>'+pc(gs)+'</b></span>'+
+      ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b>'+
+      '<small>no restrictions</small></span>'+
+    '<span><i>greedy policy manages</i><b>'+(gs*100).toFixed(3)+'%</b>'+
+      '<small>best team available each leg</small></span>'+
+    '<span><i>holiday teams held</i><b>'+
+      (hp&&hp.feasible?(hp.survive*100).toFixed(3)+'%':'not possible')+'</b>'+
+      '<small>never spent before their leg</small></span>'+
     '<span><i>legs still estimated</i><b>'+est+' of '+legs.length+'</b></span></div>';
   /* The win percentage now sits inside the cell for the game it belongs to.
      As its own column, wedged between the two matchups, it read as though it
      described the one on its right. */
   h+='<table class="bp"><tr><th>Leg</th><th>Take</th>'+
      '<th title="what the simple best-team-available rule would spend on this leg">'+
-     'Greedy would take</th></tr>';
+     'Greedy would take</th>'+
+     '<th title="best path if no holiday-leg team may be spent before its own '+
+     'holiday leg -- free to use from that leg onward">Holiday teams held'+
+     (hp&&hp.feasible?'':' (not possible)')+'</th></tr>';
   bp.rows.forEach(function(r,i){
     var hl=r.team?holidayLegsFor(r.team):[];
     h+='<tr class="'+(r.leg.hol>=0?'hol':'')+'"><td class="bl">'+r.leg.label+
@@ -963,6 +995,14 @@ function renderBestPath(){
            (gmap[i].home?'vs ':'at ')+(gmap[i].opp||'')+
            (gmap[i].wp!=null?' <span class="gwp">'+Math.round(gmap[i].wp*100)+'%</span>':''))
          :'<span class="same">same</span>')+
+       '</td>'+
+       '<td class="hp">'+((hmap[i]&&hmap[i].team)
+         ?(hmap[i].team===r.team?'<span class="same">same</span>'
+           :('<span class="tchip" style="background:'+tcol(hmap[i].team)+
+             ';min-width:2.2rem;height:1.3rem;font-size:.62rem">'+hmap[i].team+'</span> '+
+             (hmap[i].home?'vs ':'at ')+(hmap[i].opp||'')+
+             (hmap[i].wp!=null?' <span class="gwp">'+Math.round(hmap[i].wp*100)+'%</span>':'')))
+         :'<span style="color:var(--down)">&mdash;</span>')+
        '</td></tr>';
   });
   el.innerHTML=h+'</table></div>';
