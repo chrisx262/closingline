@@ -388,6 +388,13 @@ check("spending a holiday team is never reported as simply free",
 check("legs say whether they are a real line or an estimate",
       "priced by estimate" in sp.text and "estdot" in sp.text)
 check("the holiday numbers name their own source", "legsrc" in sp.text)
+# Future value (SurvivorGrid's formula) now spans estimated weeks too, which
+# moved 10 of 31 teams' star ratings. The flag must declare that mix rather
+# than implying every star rests on a real line.
+check("future value declares how much of it is estimated",
+      "still estimated, so treat the star count as a rough sort" in sp.text)
+check("weeks-ahead count is split into market vs estimated",
+      "return {total:n,market:mkt,est:n-mkt}" in sp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it

@@ -242,6 +242,17 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: FUTURE VALUE (SurvivorGrid's formula, taken 2026-08-31) silently
+  changed meaning when priors landed today. It sums (wp-0.5) over remaining
+  weeks a team is favoured; it used to see only market-priced weeks because
+  those were the only ones with a number, and now it spans all 18. That moved
+  the star rating for 10 of 31 teams (BUF 3->4, SEA 4->5, SF 5->4) and the stars
+  drive the "consider saving" flag. Kept the wider span -- it is closer to the
+  definition, and the whole reason for taking it was to catch the team favoured
+  in eight straight weeks, which you cannot see in September without estimates.
+  But the flag now states the mix ("6 weeks of real market lines and 11 still
+  estimated"), and fvWeeksAhead returns {total, market, est} instead of a bare
+  count. The stale docstring claiming market-only has been corrected.
 - 2026-09-01 CORRECTION to the depth note below: all NINE holiday-leg games are
   real market moneylines (verified), NOT estimates. The earlier justification
   ("often built off an estimate") was wrong. Depth still matters, for a

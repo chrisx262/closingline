@@ -762,8 +762,15 @@ function futureMap(){
    team that is favoured in eight straight weeks without ever being a standout.
    This is SurvivorGrid's definition instead: sum (wp - 0.5) over EVERY
    remaining game the team is favoured in. Higher = more useful later = more
-   reason not to burn it now. Only counts weeks the market has actually priced,
-   so it grows as lines post. */
+   reason not to burn it now.
+
+   It used to cover only market-priced weeks, because those were the only ones
+   with a number at all. Now that unpriced weeks carry a power-rating prior it
+   spans the whole season, which is closer to the definition -- the point of
+   taking it was to catch the team favoured in eight straight weeks, and you
+   cannot see eight weeks of a September season without estimates. But that
+   means a star rating now blends real lines with guesses, so the flag says how
+   many of each it is standing on rather than implying they are the same. */
 function futureValue(afterWeek){
   var fv={};
   WEEKS.forEach(function(w){
@@ -785,8 +792,18 @@ function fvStars(fv){
   });
   return out;
 }
+/* Weeks ahead, split by whether anyone has actually priced them. */
 function fvWeeksAhead(afterWeek){
-  return WEEKS.filter(function(w){return w.week>afterWeek;}).length;
+  var n=0,mkt=0;
+  WEEKS.forEach(function(w){
+    if(w.week<=afterWeek)return;
+    n++;
+    var real=0;
+    (w.games||[]).forEach(function(g){
+      if(g.wp_source==='ml'||g.wp_source==='spread')real++;});
+    if(real*2>=(w.games||[]).length)mkt++;
+  });
+  return {total:n,market:mkt,est:n-mkt};
 }
 function tier(wp){
   if(wp>=0.80)return['SAFE','w-safe'];
@@ -828,9 +845,11 @@ function renderBoard(){
     if(used)flags+='<span class="flag used">used · E'+act+'</span>';
     if(!used&&fv&&fv.week>w.week&&fv.wp-p.wp>=0.05)
       flags+='<span class="flag save">bigger edge Wk '+fv.week+' ('+Math.round(fv.wp*100)+'%) — consider saving</span>';
-    if(!used&&STARS[p.team]>=4&&FVW>0)
-      flags+='<span class="flag fv" title="favoured in '+FVW+' priced week'+(FVW===1?'':'s')+
-        ' ahead — total future value '+FV[p.team].toFixed(2)+', a top band. Using it now spends all of that.">'+
+    if(!used&&STARS[p.team]>=4&&FVW.total>0)
+      flags+='<span class="flag fv" title="Favoured across '+FVW.total+' week'+(FVW.total===1?'':'s')+
+        ' ahead — total future value '+FV[p.team].toFixed(2)+', a top band. Using it now spends all of that. '+
+        'Standing on '+FVW.market+' week'+(FVW.market===1?'':'s')+' of real market lines and '+
+        FVW.est+' still estimated, so treat the star count as a rough sort, not a measurement.">'+
         '★'.repeat(STARS[p.team])+'☆'.repeat(5-STARS[p.team])+' future value</span>';
     if(!used&&p.wp>=0.62&&pops[i]<=8)flags+='<span class="flag contra">lower-owned · leverage</span>';
     if(!used&&LEAN>0&&p.wp>=0.5)
