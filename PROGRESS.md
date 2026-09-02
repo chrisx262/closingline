@@ -242,6 +242,22 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01 CORRECTION to the depth note below: all NINE holiday-leg games are
+  real market moneylines (verified), NOT estimates. The earlier justification
+  ("often built off an estimate") was wrong. Depth still matters, for a
+  different reason: a line posted in September for a December game is real but
+  EARLY, and moves on every injury and three months of form.
+- 2026-09-01: INJURIES ARE HANDLED BY THE MARKET, NOT MODELLED. We take no
+  injury feed. Where a book has posted a line the injury is already in the
+  price, refreshed by 5 snapshots a week (tue-open, thu-pre-tnf, sat-midweek,
+  sun-inactives 11:35 ET which is timed for the 90-minute inactive list, and
+  sun-closing). Where no line exists the prior is fitted to lines posted BEFORE
+  the news and is injury-blind. Right now that is 11 of the 20 legs. The page
+  now says which: legs carry a `mkt` share, estimate legs are tagged "est" in
+  the survival curve, and the holiday numbers state "real line" or "estimate".
+  This is why the output is a hold-back list re-run weekly, never a 20-week
+  script -- a script cannot survive a QB injury and the market reprices faster
+  than we could.
 - 2026-09-01: HOLIDAY-POOL DEPTH is now counted and shown, after the owner
   caught the tool calling CHI and BUF free in week 1 -- both play BOTH legs.
   The reservation policy holds ONE team per leg (LA 68% Thx, PHI 55% Xmas), so

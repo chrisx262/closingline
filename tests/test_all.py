@@ -383,6 +383,11 @@ check("holiday-pool depth is counted, not just the single best team",
       "legDepth" in sp.text and "options left" in sp.text)
 check("spending a holiday team is never reported as simply free",
       "but it was a holiday team" in sp.text)
+# A market line prices today's injuries; a prior is fitted to lines posted
+# before the news and cannot. The two must be distinguishable on screen.
+check("legs say whether they are a real line or an estimate",
+      "priced by estimate" in sp.text and "estdot" in sp.text)
+check("the holiday numbers name their own source", "legsrc" in sp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it

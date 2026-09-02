@@ -342,6 +342,11 @@ body{padding-bottom:4.2rem}
 .curve td.cl{color:var(--dim);white-space:nowrap;width:9rem}
 .curve td.cv{text-align:right;width:3.2rem;font-variant-numeric:tabular-nums}
 .curve .bar{height:.62rem;border-radius:3px;background:var(--ink);display:block}
+.curve .csrc{color:var(--dim);font-size:.68rem;font-weight:700;line-height:1.5;
+  margin-bottom:.6rem}
+.estdot{font-style:normal;font-size:.55rem;font-weight:900;letter-spacing:.05em;
+  text-transform:uppercase;border:1px solid var(--line);border-radius:3px;
+  padding:0 .25rem;color:var(--dim);vertical-align:middle}
 .curve tr.hol td.cl{color:var(--down)}
 .curve tr.hol .bar{background:var(--down)}
 .cmp{width:100%;border-collapse:collapse}
@@ -736,8 +741,8 @@ function weekTeams(w){
   var out=[];
   (w.games||[]).forEach(function(g){
     if(g.home_wp==null)return;
-    out.push({team:g.home,opp:g.away,home:true,wp:g.home_wp,gid:g.game_id});
-    out.push({team:g.away,opp:g.home,home:false,wp:g.away_wp,gid:g.game_id});
+    out.push({team:g.home,opp:g.away,home:true,wp:g.home_wp,gid:g.game_id,src:g.wp_source});
+    out.push({team:g.away,opp:g.home,home:false,wp:g.away_wp,gid:g.game_id,src:g.wp_source});
   });
   // wp stays the honest market number; score = wp tilted by the home-field lean.
   out.forEach(function(p){p.score=p.wp+(p.home?LEAN:-LEAN);});
@@ -1042,12 +1047,21 @@ function buildLegs(){
   var legs=[];
   WEEKS.forEach(function(w){
     var all=weekTeams(w),li=legIndexFor(w.week);
-    if(li<0){legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:all});return;}
+    /* Where each leg's numbers come from. A market line already prices today's
+       injuries; a prior cannot, because it is fitted to lines posted before the
+       news. Callers must be able to tell them apart. */
+    function priced(list){
+      var m=0;list.forEach(function(p){if(p.src==='ml'||p.src==='spread')m++;});
+      return list.length?m/list.length:0;
+    }
+    if(li<0){legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:all,
+      mkt:priced(all)});return;}
     var hol=[],rest=[];
     all.forEach(function(p){(isLegGame(w.week,p)?hol:rest).push(p);});
-    if(hol.length)legs.push({id:'H'+li,hol:li,teams:hol,
+    if(hol.length)legs.push({id:'H'+li,hol:li,teams:hol,mkt:priced(hol),
       label:HOLIDAY_LEGS[li].emoji+' '+HOLIDAY_LEGS[li].name});
-    if(rest.length)legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:rest});
+    if(rest.length)legs.push({id:'W'+w.week,label:'Week '+w.week,hol:-1,teams:rest,
+      mkt:priced(rest)});
   });
   return legs;
 }
@@ -1189,10 +1203,12 @@ function renderSim(){
   /* HOW MANY HOLIDAY TEAMS ARE LEFT, not just the best one.
      The policy holds a single team per leg, so on its own arithmetic burning a
      worse holiday team is free. That is only true if the held team's number
-     never moves -- and it is a week-16 line, often built off an estimate. Lose
-     Philadelphia's quarterback in November and the team you held is a dog and
-     the fallbacks are gone. Depth in an eight-team pool is worth something, so
-     it gets counted and shown. */
+     never moves. Both holiday legs ARE priced by the real market -- all nine
+     games -- so those numbers are not guesses. But a line posted in September
+     for a game in December is an early line, and it moves on every injury and
+     three months of form. Lose Philadelphia's quarterback in November and the
+     team you held is a dog while the fallbacks are gone. Depth in an
+     eight-team pool is worth something, so it gets counted and shown. */
   function legDepth(i){
     var all=teamsInLeg(HOLIDAY_LEGS[i]),n=0;
     all.forEach(function(t){if(spent.indexOf(t)<0)n++;});
@@ -1209,11 +1225,15 @@ function renderSim(){
     '<span class="epsub">Nothing spent yet &mdash; use a team on the board above.</span>')+'</div>';
   if(me){
     function em(i){return me.fielded[i]==null?'&mdash;':Math.round(me.fielded[i]*100)+'%';}
+    function legsrc(i){
+      var L=(i===0)?(iTm>=0?legs[iTm]:null):(iXm>=0?legs[iXm]:null);
+      return (L&&L.mkt>=0.5)?'real line':'estimate';
+    }
     meH+='<div class="epstats">'+
       '<span><i>reaches &#127860;</i> '+(iTm>0?pc(me.alive[iTm-1]/me.n):'--')+
-        ' <small>with a '+em(0)+' team</small></span>'+
+        ' <small>with a '+em(0)+' team &middot; '+legsrc(0)+'</small></span>'+
       '<span><i>reaches &#127876;</i> '+(iXm>0?pc(me.alive[iXm-1]/me.n):'--')+
-        ' <small>with a '+em(1)+' team</small></span>'+
+        ' <small>with a '+em(1)+' team &middot; '+legsrc(1)+'</small></span>'+
       '<span><i>&#127860; options left</i> '+depth[0].left+' <small>of '+depth[0].of+'</small></span>'+
       '<span><i>&#127876; options left</i> '+depth[1].left+' <small>of '+depth[1].of+'</small></span>'+
       '<span><i>runs the table</i> '+pc(me.alive[legs.length-1]/me.n)+'</span>'+
@@ -1311,10 +1331,19 @@ function renderSim(){
     (dx<0?' -- it is costing you here':'')+'.';
 
   /* survival curve */
-  var ch='<div class="curve"><table>';
+  var est=0;
+  legs.forEach(function(L){if(L.mkt<0.5)est++;});
+  var ch='<div class="curve"><div class="csrc">'+
+    (est?('<b>'+est+' of '+legs.length+'</b> legs are still priced by estimate, marked '+
+          '<i class="estdot">est</i> below. Those cannot know about an injury &mdash; '+
+          'they are fitted to lines posted before the news. They firm up as books '+
+          'post them.')
+        :'Every leg is priced by a real market line.')+
+    ' Both holiday legs are real lines.</div><table>';
   legs.forEach(function(L,i){
     var v=r.alive[i]/r.n;
-    ch+='<tr class="'+(L.hol>=0?'hol':'')+'"><td class="cl">'+L.label+'</td>'+
+    ch+='<tr class="'+(L.hol>=0?'hol':'')+'"><td class="cl">'+L.label+
+        (L.mkt<0.5?' <i class="estdot">est</i>':'')+'</td>'+
         '<td><span class="bar" style="width:'+Math.max(1,v*100)+'%"></span></td>'+
         '<td class="cv">'+pc(v)+'</td></tr>';
   });
