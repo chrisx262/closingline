@@ -276,6 +276,22 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
   background:var(--panel);color:var(--ink)}
 .ecount-ctl .ehintsm{color:var(--dim);font-size:.72rem}
 /* scenario simulator */
+.entrypanel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:.8rem 1rem;box-shadow:var(--shadow);margin-bottom:.9rem}
+.entrypanel .eptop{display:flex;justify-content:space-between;align-items:baseline;
+  flex-wrap:wrap;gap:.4rem}
+.entrypanel .eptop b{font-size:1rem}
+.entrypanel .epsub{color:var(--dim);font-size:.68rem;font-weight:700}
+.entrypanel .epspent{margin:.5rem 0 .6rem;display:flex;flex-wrap:wrap;gap:.35rem;
+  align-items:center;font-size:.7rem;font-weight:700;color:var(--dim)}
+.entrypanel .epstats{display:flex;flex-wrap:wrap;gap:1.1rem;padding-top:.55rem;
+  border-top:1px solid var(--line)}
+.entrypanel .epstats span{font-size:.9rem;font-weight:900;white-space:nowrap}
+.entrypanel .epstats i{display:block;color:var(--dim);font-size:.58rem;font-style:normal;
+  font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.entrypanel .epstats small{color:var(--dim);font-size:.62rem;font-weight:700}
+.simcaption{grid-column:1/-1;color:var(--dim);font-size:.6rem;font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:-.2rem}
 .simctl{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.8rem}
 .simctl button{font:inherit;font-weight:800;font-size:.72rem;padding:.4rem .8rem;
   border-radius:999px;border:1px solid var(--line);background:var(--panel);
@@ -411,6 +427,7 @@ table.plan{width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px}
     <button id="simReserve" class="on" onclick="toggleReserve()">Holding holiday teams back</button>
     <span class="simnote" id="simstatus"></span>
   </div>
+  <div id="simentry"></div>
   <div class="simcards" id="simcards"></div>
   <div id="simcurve"></div>
   <h3 style="font-size:.95rem;margin:.2rem 0 .5rem">If you pick this now, what happens later?</h3>
@@ -1040,10 +1057,14 @@ function runEntry(legs,used,res,rnd,forceTeam,rec){
   }
   return -1;
 }
-function simulate(n,reserve,forceTeam,forceEntry){
+function simulate(n,reserve,forceTeam,forceEntry,onlyId){
   var legs=buildLegs();
   if(!legs.length)return null;
   var ids=aliveIds();
+  /* Restricting to one entry is what makes a single pick visible. Across ten
+     entries any one choice is lost in the aggregate, which reads as the tool
+     ignoring you. */
+  if(onlyId)ids=ids.filter(function(x){return x===onlyId;});
   if(!ids.length)return null;
   var pre=ids.map(function(id){
     var u={};usedBy(id).forEach(function(t){u[t]=1;});
@@ -1079,8 +1100,11 @@ function legIdx(legs,id){for(var i=0;i<legs.length;i++){if(legs[i].id===id)retur
    running the table is genuinely rare, and "0%" reads as impossible when the
    honest answer is "unlikely". */
 function pc(x){
-  if(x>0&&x<0.005)return '<1%';
-  if(x<1&&x>0.995)return '>99%';
+  /* HTML entities, not '<' and '>'. These strings go into innerHTML, and a
+     literal '<1%' is parsed as the start of a tag and silently swallowed --
+     which showed a blank where the rarest and most interesting numbers go. */
+  if(x>0&&x<0.005)return '&lt;1%';
+  if(x<1&&x>0.995)return '&gt;99%';
   return Math.round(x*100)+'%';
 }
 
@@ -1107,7 +1131,35 @@ function renderSim(){
   var iT=legIdx(legs,'H0'),iX=legIdx(legs,'H1');
   var other=simulate(2500,!RESERVE,null,null);
 
-  /* headline numbers */
+  /* THE ACTIVE ENTRY, ON ITS OWN.
+     Everything below this is a "do any of my entries survive" number, and with
+     ten entries a single pick cannot move one. That made the tool look inert
+     after a click. These numbers are for the one entry you are actually
+     picking for, so using a team visibly changes them. */
+  var actId=active();
+  var me=simulate(SIM_SEASONS,RESERVE,null,null,actId);
+  var spent=usedBy(actId);
+  var iTm=iT,iXm=iX;
+  var chips=spent.map(function(t){
+    return '<span class="holdchip" style="background:'+tcol(t)+'">'+t+'</span>';}).join('');
+  var meH='<div class="entrypanel"><div class="eptop"><b>Entry '+actId+'</b>'+
+    '<span class="epsub">'+spent.length+' of '+legs.length+' legs spent &middot; '+
+    (32-spent.length)+' teams still available</span></div>';
+  meH+='<div class="epspent">'+(chips?'Spent: '+chips:
+    '<span class="epsub">Nothing spent yet &mdash; use a team on the board above.</span>')+'</div>';
+  if(me){
+    function em(i){return me.fielded[i]==null?'&mdash;':Math.round(me.fielded[i]*100)+'%';}
+    meH+='<div class="epstats">'+
+      '<span><i>reaches &#127860;</i> '+(iTm>0?pc(me.alive[iTm-1]/me.n):'--')+
+        ' <small>with a '+em(0)+' team</small></span>'+
+      '<span><i>reaches &#127876;</i> '+(iXm>0?pc(me.alive[iXm-1]/me.n):'--')+
+        ' <small>with a '+em(1)+' team</small></span>'+
+      '<span><i>runs the table</i> '+pc(me.alive[legs.length-1]/me.n)+'</span>'+
+      '<span><i>typical exit</i> leg '+Math.round(me.avgReach)+'</span></div>';
+  }
+  document.getElementById('simentry').innerHTML=meH+'</div>';
+
+  /* headline numbers, across every entry you still have alive */
   var cardsH='';
   function card(lab,val,sub,warn){
     return '<div class="simcard'+(warn?' warn':'')+'"><div class="sclab">'+lab+'</div>'+
@@ -1123,7 +1175,8 @@ function renderSim(){
     r.entries+(r.entries===1?' entry':' entries')+', all '+legs.length+' legs');
   cardsH+=card('Typical furthest entry','leg '+Math.round(r.avgReach),
     'of '+legs.length+' -- most seasons end early');
-  cards.innerHTML=cardsH;
+  cards.innerHTML='<div class="simcaption">Across all '+r.entries+
+    (r.entries===1?' entry':' entries')+'</div>'+cardsH;
 
   /* Compare holdbacks on the team you FIELD at the holiday legs, not on whether
      you survive to them. Survival barely moves either way because most seasons

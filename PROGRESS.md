@@ -242,6 +242,16 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-01: simulator shows the ACTIVE ENTRY on its own, above the
+  portfolio-wide cards. Found by the owner: he used a team on entry 1 and
+  nothing on screen moved. Everything shown was an "any of my 10 entries"
+  aggregate, which one pick cannot shift, so a correct tool looked broken. The
+  per-entry panel (legs spent, teams left, its own holiday numbers) changes on
+  every click. simulate() gained an onlyId argument to make it possible.
+- 2026-09-01: pc() must return HTML entities. It returned the literal '<1%',
+  which innerHTML parses as the start of a tag and silently drops -- blanking
+  precisely the rarest numbers ("runs the table" for a single entry). Test now
+  asserts the escaped form and forbids the raw one.
 - 2026-09-01: SCENARIO SIMULATOR shipped on /survivor. Browser-side Monte Carlo
   over the whole remaining season, re-run on every pick/entry change, so the
   owner can try a plan and back out of it. Models a Circa season as 20 LEGS, not

@@ -358,6 +358,14 @@ check("simulator is seeded, so a number only moves when the board does",
       "mulberry32" in sp.text)
 check("simulator warns the percentages are not forecasts",
       "ranking of your options" in sp.text)
+check("simulator shows the active entry on its own, not just the portfolio",
+      'id="simentry"' in sp.text and "Across all " in sp.text)
+# '<1%' written straight into innerHTML is parsed as the start of a tag and
+# vanishes, blanking exactly the rarest numbers. Must be entity-escaped.
+check("small probabilities are HTML-escaped, not swallowed as a tag",
+      "&lt;1%" in sp.text and "return '<1%'" not in sp.text
+      and "return '>99%'" not in sp.text)
+check("simulate() can be restricted to one entry", "onlyId" in sp.text)
 
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it
