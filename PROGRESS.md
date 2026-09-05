@@ -242,6 +242,20 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-04: THE ESTIMATES ARE GONE. The odds cron fired 2026-09-03 22:00:51
+  UTC and The Odds API returned the WHOLE SEASON -- 272 snapshots in one batch,
+  all 18 weeks, every one with a moneyline. /data/survivor now reports 272
+  market lines and 0 priors. Verified genuine rather than assumed: every spread
+  sits on a half or whole point (a power-rating fill produces decimals), 32
+  distinct values, and spread magnitude does not flatten in later weeks the way
+  a synthetic fill would. nflverse still carries only 112 and nothing past week
+  16, so this did NOT come from the archive. scripts/snapshot_audit.py added to
+  answer this class of question -- grouping snapshots by captured_at separates
+  archive-seeded (timestamped at kickoff, in the future) from real captures.
+- 2026-09-04: strategy findings from 2026-09-02 SURVIVE the full-season pricing.
+  Thanksgiving is still the fragile leg (LA 68%, next BUF 57% -- an 11-point
+  cliff); Christmas is still robust (PHI 54, BUF 54, CHI 52, LA 52). Nothing on
+  either leg moved more than 2 points.
 - 2026-09-02: DEPLOYED and verified live. All six routes 200 including the new
   /survivor/sim; /data/survivor serves 272 games over 18 weeks (114 market lines,
   158 estimates) with the as_of field. Ran the deployed simulator against prod
