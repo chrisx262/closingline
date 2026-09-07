@@ -621,8 +621,10 @@ function weekTeams(w){
   var out=[];
   (w.games||[]).forEach(function(g){
     if(g.home_wp==null)return;
-    out.push({team:g.home,opp:g.away,home:true,wp:g.home_wp,gid:g.game_id,src:g.wp_source});
-    out.push({team:g.away,opp:g.home,home:false,wp:g.away_wp,gid:g.game_id,src:g.wp_source});
+    out.push({team:g.home,opp:g.away,home:true,wp:g.home_wp,gid:g.game_id,
+              src:g.wp_source,div:!!g.div});
+    out.push({team:g.away,opp:g.home,home:false,wp:g.away_wp,gid:g.game_id,
+              src:g.wp_source,div:!!g.div});
   });
   // wp stays the honest market number; score = wp tilted by the home-field lean.
   out.forEach(function(p){p.score=p.wp+(p.home?LEAN:-LEAN);});

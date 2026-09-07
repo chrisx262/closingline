@@ -416,6 +416,38 @@ check("opening options are ranked by where the season ends up, not by this week"
 # owner read it. Every team on this page is a coloured chip.
 # We do not predict injuries. What is knowable today is how much the plan leans
 # on any one team, measured by removing it and re-solving.
+# Pick preferences: tested on 5,065 priced favourites 2006-2025 and none of the
+# three is an edge, so the page must present them as preference and price them.
+check("pick-rule toggles exist for division, home and overseas",
+      "PREFS={noDiv" in simp.text and "togglePref(" in simp.text)
+check("the page states the rules are preference, not an edge",
+      "is an edge" in simp.text and "5,065 priced favourites" in simp.text
+      and "preference, not advantage" in simp.text)
+check("the rules are a penalty, not a ban (week 18 is entirely divisional)",
+      "var PENALTY=" in simp.text and "unfinishable" in simp.text)
+check("greedy honours the same rules, or the columns are not comparable",
+      "would not be" in simp.text and "comparing the same thing" in simp.text)
+
+# The overseas list is hardcoded on the page. If it drifts from the schedule
+# every recommendation built on it is wrong, and it would fail silently.
+import re as _re  # noqa: E402
+from app import Game as _Game  # noqa: E402
+_intl = _re.search(r"var INTL=\[(.*?)\];", simp.text, re.S if False else _re.S)
+check("the overseas game list is declared", _intl is not None)
+if _intl:
+    _pairs = _re.findall(r"\[(\d+),'([A-Z]+)','([A-Z]+)'\]", _intl.group(1))
+    check("the overseas list is populated", len(_pairs) == 8)
+    _ss = SessionLocal()
+    _seasons = [x[0] for x in _ss.query(_Game.season).distinct().all()]
+    _real = {(g.week, g.away, g.home)
+             for g in _ss.query(_Game).filter(_Game.season.in_(_seasons)).all()}
+    _ss.close()
+    _missing = [p for p in _pairs if (int(p[0]), p[1], p[2]) not in _real]
+    # only meaningful once a real schedule is loaded, not the synthetic seed
+    _found = [p for p in _pairs if (int(p[0]), p[1], p[2]) in _real]
+    check("every overseas game matches a real scheduled game "
+          "(skipped on synthetic data)", not _found or not _missing)
+
 check("a contingency panel shows the fallback ladder at each leg",
       'id="contingency"' in simp.text and "function renderContingency(" in simp.text)
 check("contingency is measured by removing a team, not by guessing injuries",

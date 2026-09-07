@@ -1242,6 +1242,9 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
                     "home_score": g.home_score, "away_score": g.away_score,
                     "home_wp": round(home_wp, 4) if home_wp is not None else None,
                     "away_wp": away_wp, "wp_source": src,
+                    # Context a caller may want to filter on. Divisional status
+                    # comes from the schedule, not from us.
+                    "div": bool(g.div_game),
                     "spread_home": round(spread, 1) if spread is not None else None})
             out_weeks.append({"week": wk, "games": rows})
     return {"season": season, "start_week": start_week, "weeks": out_weeks,

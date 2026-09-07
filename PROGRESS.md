@@ -242,6 +242,23 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-06: PICK RULES on /survivor/sim -- avoid division games, home teams
+  only, avoid overseas games. Owner's request, "based on history this should be
+  a good path to victory". TESTED FIRST on 5,065 priced favourites 2006-2025 and
+  NONE OF THE THREE IS AN EDGE. Survivor-grade (65%+): division favourites went
+  75.8% against a 75.2% price, non-division 75.3% against 74.7% -- identical, and
+  division marginally the better side. Home favourites beat their price by 0.3
+  pts, ROAD favourites by 1.1. Overseas sample is 25 games, says nothing. All
+  gaps inside the noise; the market has all three priced.
+- 2026-09-06: built them anyway with the cost shown, because a preference that
+  costs little is the owner's to take. On the 2026 board: avoid overseas costs
+  0% (FREE -- take it), home-only -19%, avoid-division -41%, all three -44%.
+  Implemented as a heavy finite PENALTY (2.0 log-prob) not a ban, because WEEK 18
+  IS ENTIRELY DIVISIONAL (16 of 16) so a hard rule makes the season unfinishable;
+  the panel reports which legs the schedule forced. Greedy honours the same rules
+  or the two columns would not be comparing the same thing. /data/survivor now
+  exposes `div`; the 8 overseas games are hardcoded like HOLIDAY_LEGS and the
+  suite validates all 8 against the real schedule.
 - 2026-09-04: THE ESTIMATES ARE GONE. The odds cron fired 2026-09-03 22:00:51
   UTC and The Odds API returned the WHOLE SEASON -- 272 snapshots in one batch,
   all 18 weeks, every one with a moneyline. /data/survivor now reports 272

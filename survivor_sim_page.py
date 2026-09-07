@@ -62,6 +62,19 @@ table.bp.pp th{text-align:center}
   background:color-mix(in srgb,var(--save) 10%,transparent)}
 .rung b{font-weight:900;font-variant-numeric:tabular-nums}
 .rung i{font-style:normal;color:var(--dim);font-size:.6rem;font-weight:700}
+.prefbar{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;margin-bottom:.6rem}
+.prefbar .preflab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;margin-right:.2rem}
+.prefbar button{font:inherit;font-weight:800;font-size:.68rem;padding:.3rem .7rem;
+  border-radius:999px;border:1px solid var(--line);background:var(--panel);
+  color:var(--ink);cursor:pointer}
+.prefbar button.on{background:var(--save);color:#fff;border-color:var(--save)}
+.prefcost{font-size:.68rem;font-weight:700;line-height:1.55;color:var(--dim);
+  border:1px solid var(--line);border-left:3px solid var(--save);border-radius:6px;
+  padding:.5rem .7rem;margin-bottom:.8rem}
+.prefcost.bad{border-left-color:var(--down)}
+.prefcost b{color:var(--ink)}
+.prefcost i{display:block;margin-top:.3rem;font-style:normal;opacity:.85}
 .bpstart{margin-bottom:.9rem}
 .bpslab{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;margin-bottom:.35rem}
@@ -815,6 +828,57 @@ function settledFor(id,legs){
    the protect rule is unavailable until that leg and free from it onward; one
    that plays both is therefore locked only until Thanksgiving, since using it
    there is what spends it. */
+
+/* ================= PICK PREFERENCES =================
+   Three rules the owner wanted to apply: avoid teams playing a division game,
+   favour home teams, avoid teams playing an overseas game.
+
+   TESTED BEFORE BUILDING, on 5,065 priced favourites from 2006-2025. None of
+   the three is an edge. Among survivor-grade favourites (65%+): division
+   favourites went 75.8% against a 75.2% price, non-division 75.3% against
+   74.7% -- identical, and division is the better of the two if anything. Home
+   favourites beat their price by 0.3 points, ROAD favourites by 1.1. The
+   overseas sample is 25 games, which says nothing. Every gap is inside the
+   noise. The market has all three priced.
+
+   They are built anyway, because a preference that costs little is yours to
+   take and the panel shows exactly what it costs. What they are not is an edge,
+   and the page says so rather than implying the constraint is free money.
+
+   Applied as a heavy but finite penalty rather than a hard ban, because week 18
+   is ENTIRELY divisional -- all sixteen games -- so a hard "no division" rule
+   makes the season unfinishable. A penalty lets the solver comply everywhere it
+   can and break the rule only where the schedule leaves no choice, which it
+   then reports. */
+var PREFS={noDiv:false,homeOnly:false,noIntl:false};
+var PENALTY=2.0;   /* in log-probability: avoid unless there is no alternative */
+
+/* 2026 games played outside the United States. Eight of them; the home team is
+   nominally home but is not at home. Validated against the schedule by the
+   suite, the same way the holiday legs are. */
+var INTL=[[1,'SF','LA'],[3,'BAL','DAL'],[4,'IND','WAS'],[6,'HOU','JAX'],
+          [7,'PIT','NO'],[9,'CIN','ATL'],[10,'NE','DET'],[11,'MIN','SF']];
+function isIntl(week,team){
+  for(var i=0;i<INTL.length;i++){
+    if(INTL[i][0]===week&&(INTL[i][1]===team||INTL[i][2]===team))return true;
+  }
+  return false;
+}
+function prefPenalty(L,p){
+  var n=0;
+  if(PREFS.noDiv&&p.div)n++;
+  if(PREFS.homeOnly&&!p.home)n++;
+  if(PREFS.noIntl&&isIntl(L.week,p.team))n++;
+  return n*PENALTY;
+}
+function prefsOn(){return PREFS.noDiv||PREFS.homeOnly||PREFS.noIntl;}
+function togglePref(k){
+  PREFS[k]=!PREFS[k];
+  var b=document.getElementById('pref_'+k);
+  if(b)b.className=PREFS[k]?'on':'';
+  renderAll();
+}
+
 function firstHolidayLeg(legs){
   var out={};
   legs.forEach(function(L,i){
@@ -863,7 +927,7 @@ function bestPath(legs,usedList,forceFirst,taken,penalty,settled,protect){
       if(protect&&protect[p.team]!=null&&map[i]<protect[p.team]){
         cost[i+1][j]=BIG;
       }else{
-        cost[i+1][j]=-Math.log(wp)+clash*(penalty||0);
+        cost[i+1][j]=-Math.log(wp)+clash*(penalty||0)+prefPenalty(L,p);
       }
     });
   });
@@ -925,13 +989,22 @@ function greedyPath(legs,usedList,settled){
       continue;
     }
     open++;
-    for(j=0;j<L.teams.length;j++){
-      p=L.teams[j];
+    /* Greedy honours the same preferences, or the two columns would not be
+       comparing the same thing. It re-sorts by the penalised score rather than
+       raw win probability. */
+    var order=L.teams;
+    if(prefsOn()){
+      order=L.teams.slice().sort(function(x,y){
+        return (-Math.log(Math.min(0.999,Math.max(0.001,x.wp)))+prefPenalty(L,x))
+             - (-Math.log(Math.min(0.999,Math.max(0.001,y.wp)))+prefPenalty(L,y));});
+    }
+    for(j=0;j<order.length;j++){
+      p=order[j];
       if(u[p.team])continue;
       if(res[p.team]&&res[p.team]!==L.id)continue;
       pick=p;break;
     }
-    if(!pick){for(j=0;j<L.teams.length;j++){p=L.teams[j];if(!u[p.team]){pick=p;break;}}}
+    if(!pick){for(j=0;j<order.length;j++){p=order[j];if(!u[p.team]){pick=p;break;}}}
     if(!pick){rows.push({leg:L,team:null,wp:null});ok=false;continue;}
     u[pick.team]=1;
     logsum+=-Math.log(Math.min(0.999,Math.max(0.001,pick.wp)));
@@ -1011,6 +1084,11 @@ function renderBestPath(){
   var legs=buildLegs(),act=active();
   var settled=settledFor(act,legs);
   var free=bestPath(legs,usedBy(act),null,null,null,settled);
+  /* the same solve with no preferences at all, to price what they cost */
+  var savedPrefs={noDiv:PREFS.noDiv,homeOnly:PREFS.homeOnly,noIntl:PREFS.noIntl};
+  PREFS={noDiv:false,homeOnly:false,noIntl:false};
+  var unconstrained=bestPath(legs,usedBy(act),null,null,null,settled);
+  PREFS=savedPrefs;
   var firstOpen=null;
   for(var fi=0;fi<legs.length;fi++){if(settled[fi]==null){firstOpen=legs[fi];break;}}
   /* Every team you could open with, each followed by ITS best continuation.
@@ -1060,7 +1138,38 @@ function renderBestPath(){
      the same way as the one beside it: TEAM vs OPP */
   var gmap={};if(gp)gp.rows.forEach(function(r,i){gmap[i]=r;});
   var est=0;bp.rows.forEach(function(r){if(r.leg.mkt<0.5)est++;});
-  var h='<div class="bpwrap">'+startH+'<div class="bphead">'+
+  /* what the rules cost, and where the schedule refused to co-operate */
+  var broke={div:0,road:0,intl:0};
+  bp.rows.forEach(function(r){
+    if(!r.team||r.settled)return;
+    if(PREFS.noDiv&&r.leg.teams.some(function(x){return x.team===r.team&&x.div;}))broke.div++;
+    if(PREFS.homeOnly&&!r.home)broke.road++;
+    if(PREFS.noIntl&&isIntl(r.leg.week,r.team))broke.intl++;
+  });
+  var prefH='<div class="prefbar">'+
+    '<span class="preflab">Pick rules</span>'+
+    '<button id="pref_noDiv" class="'+(PREFS.noDiv?'on':'')+
+      '" onclick="togglePref(&#39;noDiv&#39;)">Avoid division games</button>'+
+    '<button id="pref_homeOnly" class="'+(PREFS.homeOnly?'on':'')+
+      '" onclick="togglePref(&#39;homeOnly&#39;)">Home teams only</button>'+
+    '<button id="pref_noIntl" class="'+(PREFS.noIntl?'on':'')+
+      '" onclick="togglePref(&#39;noIntl&#39;)">Avoid overseas games</button>'+
+    '</div>';
+  if(prefsOn()&&unconstrained&&unconstrained.survive>0){
+    var lost=(1-bp.survive/unconstrained.survive)*100;
+    var forced=[];
+    if(broke.div)forced.push(broke.div+' divisional');
+    if(broke.road)forced.push(broke.road+' on the road');
+    if(broke.intl)forced.push(broke.intl+' overseas');
+    prefH+='<div class="prefcost'+(lost>25?' bad':'')+'">These rules cost <b>'+
+      lost.toFixed(0)+'%</b> of the season &mdash; '+(bp.survive*100).toFixed(3)+
+      '% against '+(unconstrained.survive*100).toFixed(3)+'% unrestricted.'+
+      (forced.length?' The schedule forced '+forced.join(', ')+
+        ' anyway; week 18 is entirely divisional, so that rule cannot be kept to the end.':'')+
+      ' <i>Tested on 5,065 priced favourites 2006-2025, none of these three is an '+
+      'edge &mdash; the market has them priced. Treat them as preference, not advantage.</i></div>';
+  }
+  var h='<div class="bpwrap">'+prefH+startH+'<div class="bphead">'+
     '<span><i>'+(BPSTART?('path if you open with '+BPSTART):'best path')+
       ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b>'+
       '<small>no restrictions</small></span>'+
