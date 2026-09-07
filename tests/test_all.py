@@ -420,6 +420,16 @@ check("opening options are ranked by where the season ends up, not by this week"
 # three is an edge, so the page must present them as preference and price them.
 check("pick-rule toggles exist for division, home and overseas",
       "PREFS={noDiv" in simp.text and "togglePref(" in simp.text)
+# A constrained path mistaken for an unconstrained one is the failure mode, so
+# OFF must be stated rather than implied by the absence of a banner.
+check("the off state is spelled out, not just implied",
+      "all off &mdash; showing the unrestricted best path" in simp.text)
+check("each rule button carries its own ON/off label",
+      'class="onoff"' in simp.text and "nOn?('<b>'+nOn+' ON</b>')" in simp.text)
+check("the headline number says when rules are applied",
+      "pick rule" in simp.text and "ruleflag" in simp.text)
+check("pick rules reset to off on reload, so one cannot be left on by accident",
+      "var PREFS={noDiv:false,homeOnly:false,noIntl:false};" in simp.text)
 check("the page states the rules are preference, not an edge",
       "is an edge" in simp.text and "5,065 priced favourites" in simp.text
       and "preference, not advantage" in simp.text)

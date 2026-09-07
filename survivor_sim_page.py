@@ -68,7 +68,18 @@ table.bp.pp th{text-align:center}
 .prefbar button{font:inherit;font-weight:800;font-size:.68rem;padding:.3rem .7rem;
   border-radius:999px;border:1px solid var(--line);background:var(--panel);
   color:var(--ink);cursor:pointer}
+.prefbar button{display:inline-flex;align-items:center;gap:.35rem}
 .prefbar button.on{background:var(--save);color:#fff;border-color:var(--save)}
+.prefbar button .tick{font-size:.7rem;line-height:1}
+.prefbar button .onoff{font-size:.55rem;font-weight:900;letter-spacing:.08em;
+  opacity:.7;border-left:1px solid currentColor;padding-left:.35rem;margin-left:.1rem}
+.prefbar.active{border:1px solid color-mix(in srgb,var(--save) 45%,var(--line));
+  border-radius:8px;padding:.45rem .55rem;
+  background:color-mix(in srgb,var(--save) 7%,transparent)}
+.prefbar .preflab b{color:var(--save);font-size:.66rem}
+.prefbar .preflab i{font-style:normal;text-transform:none;letter-spacing:0;
+  font-weight:700;font-size:.64rem}
+.ruleflag{color:var(--save);font-weight:900}
 .prefcost{font-size:.68rem;font-weight:700;line-height:1.55;color:var(--dim);
   border:1px solid var(--line);border-left:3px solid var(--save);border-radius:6px;
   padding:.5rem .7rem;margin-bottom:.8rem}
@@ -1146,14 +1157,23 @@ function renderBestPath(){
     if(PREFS.homeOnly&&!r.home)broke.road++;
     if(PREFS.noIntl&&isIntl(r.leg.week,r.team))broke.intl++;
   });
-  var prefH='<div class="prefbar">'+
-    '<span class="preflab">Pick rules</span>'+
-    '<button id="pref_noDiv" class="'+(PREFS.noDiv?'on':'')+
-      '" onclick="togglePref(&#39;noDiv&#39;)">Avoid division games</button>'+
-    '<button id="pref_homeOnly" class="'+(PREFS.homeOnly?'on':'')+
-      '" onclick="togglePref(&#39;homeOnly&#39;)">Home teams only</button>'+
-    '<button id="pref_noIntl" class="'+(PREFS.noIntl?'on':'')+
-      '" onclick="togglePref(&#39;noIntl&#39;)">Avoid overseas games</button>'+
+  var nOn=(PREFS.noDiv?1:0)+(PREFS.homeOnly?1:0)+(PREFS.noIntl?1:0);
+  function pbtn(k,label){
+    var on=PREFS[k];
+    return '<button id="pref_'+k+'" class="'+(on?'on':'')+
+      '" onclick="togglePref(&#39;'+k+'&#39;)">'+
+      '<span class="tick">'+(on?'&#10003;':'&#9679;')+'</span>'+label+
+      '<span class="onoff">'+(on?'ON':'off')+'</span></button>';
+  }
+  /* The OFF state has to be stated, not implied by the absence of a banner. A
+     constrained path read as an unconstrained one is the whole failure mode. */
+  var prefH='<div class="prefbar'+(nOn?' active':'')+'">'+
+    '<span class="preflab">Pick rules '+
+      (nOn?('<b>'+nOn+' ON</b>'):'<i>all off &mdash; showing the unrestricted best path</i>')+
+      '</span>'+
+    pbtn('noDiv','Avoid division games')+
+    pbtn('homeOnly','Home teams only')+
+    pbtn('noIntl','Avoid overseas games')+
     '</div>';
   if(prefsOn()&&unconstrained&&unconstrained.survive>0){
     var lost=(1-bp.survive/unconstrained.survive)*100;
@@ -1172,7 +1192,8 @@ function renderBestPath(){
   var h='<div class="bpwrap">'+prefH+startH+'<div class="bphead">'+
     '<span><i>'+(BPSTART?('path if you open with '+BPSTART):'best path')+
       ' survives all '+legs.length+'</i><b>'+(bp.survive*100).toFixed(3)+'%</b>'+
-      '<small>no restrictions</small></span>'+
+      '<small>'+(nOn?('<span class="ruleflag">'+nOn+' pick rule'+(nOn===1?'':'s')+
+        ' applied</span>'):'no restrictions')+'</small></span>'+
     '<span><i>greedy policy manages</i><b>'+(gs*100).toFixed(3)+'%</b>'+
       '<small>best team available each leg</small></span>'+
     '<span><i>holiday teams held</i><b>'+
