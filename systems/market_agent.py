@@ -41,32 +41,40 @@ sys.path.insert(0, ".")
 
 BASE = os.environ.get("CLOSINGLINE_URL",
                       "https://closingline-production.up.railway.app")
-AGENT_NAME = "closingline_market"
+# Two agents, same selection rule, different clocks. That is the point: the
+# only thing varying between them is WHEN they bought, so the gap between their
+# records is the value of the early price, measured rather than argued about.
+OPEN_NAME = "closingline_open"     # Tuesday, when the week's lines post
+CLOSE_NAME = "closingline_close"   # ~80 min before kickoff, after inactives
 MODEL_VERSION = "market_devig_v1"
 KEY_FILE = os.path.expanduser("~/closingline/.market_agent_key")
+CLOSE_KEY_FILE = os.path.expanduser("~/closingline/.close_agent_key")
+AGENT_NAME = OPEN_NAME
 
 
-def get_key():
+def get_key(name=None, key_file=None):
     """The agent's API key, registering it once on first use.
 
     Stored in a git-ignored file beside the admin key. Registration returns the
     raw key exactly once -- the server keeps only a hash -- so losing this file
     means the agent can never pick again and its record is frozen where it is.
     """
-    if os.path.exists(KEY_FILE):
-        return open(KEY_FILE).read().strip()
+    name = name or AGENT_NAME
+    key_file = key_file or KEY_FILE
+    if os.path.exists(key_file):
+        return open(key_file).read().strip()
     r = requests.post(f"{BASE}/agents/register",
-                      json={"name": AGENT_NAME, "kind": "bot"}, timeout=30)
+                      json={"name": name, "kind": "bot"}, timeout=30)
     if r.status_code == 409:
-        sys.exit(f"'{AGENT_NAME}' is already registered but {KEY_FILE} is "
-                 "missing. The raw key is unrecoverable; register under a new "
-                 "name rather than trying to reuse this one.")
+        sys.exit(f"'{name}' is already registered but {key_file} is missing. "
+                 "The raw key is unrecoverable; register under a new name "
+                 "rather than trying to reuse this one.")
     r.raise_for_status()
     key = r.json()["api_key"]
-    with open(KEY_FILE, "w") as f:
+    with open(key_file, "w") as f:
         f.write(key)
-    os.chmod(KEY_FILE, 0o600)
-    print(f"registered {AGENT_NAME}; key saved to {KEY_FILE}")
+    os.chmod(key_file, 0o600)
+    print(f"registered {name}; key saved to {key_file}")
     return key
 
 
@@ -92,6 +100,91 @@ def week_picks(week, season=None):
             out.append((g["game_id"], side, opp, wp, g["wp_source"], home))
     out.sort(key=lambda x: -x[3])
     return out
+
+
+# ------------------------------------------------------------ close agent
+def submit_close_wave(minutes_ahead, window_min, dry=False):
+    """Back the market favourite in every game kicking off in ~minutes_ahead.
+
+    Run by the scheduler immediately AFTER the closing snapshot, so the price
+    it buys at is the one just captured -- which is the whole difference
+    between this agent and the open one. Reads games straight from the
+    database (it runs inside the web process) but submits through the HTTP API
+    like everyone else, so the pick is server-priced and the invariants apply
+    to it exactly as they do to a stranger's bot.
+
+    Returns (submitted, failed, skipped).
+    """
+    from datetime import datetime, timedelta
+    from app import (SessionLocal, Game, Pick, Agent, snapshot_at,
+                     devig_two_way, wp_from_spread)
+
+    key = os.environ.get("CLOSE_AGENT_KEY")
+    if not key:
+        print("close agent: CLOSE_AGENT_KEY not set — skipping")
+        return (0, 0, 0)
+
+    now = datetime.utcnow()
+    lo = now + timedelta(minutes=minutes_ahead)
+    hi = lo + timedelta(minutes=window_min)
+    s = SessionLocal()
+    try:
+        games = (s.query(Game)
+                   .filter(Game.final == False,  # noqa: E712
+                           Game.kickoff >= lo, Game.kickoff < hi)
+                   .order_by(Game.kickoff).all())
+        agent = s.query(Agent).filter(Agent.name == CLOSE_NAME).first()
+        # A pick is immutable, so re-submitting one is not merely wasteful, it
+        # is a second live position on the same game.
+        already = set()
+        if agent:
+            already = {p.game_id for p in s.query(Pick)
+                       .filter(Pick.agent_id == agent.id).all()}
+        plan = []
+        for g in games:
+            if g.id in already:
+                continue
+            snap = snapshot_at(s, g.id, now)
+            if not snap:
+                continue
+            if snap.ml_home is not None and snap.ml_away is not None:
+                hw = devig_two_way(snap.ml_home, snap.ml_away)
+            elif snap.spread_home_line is not None:
+                hw = wp_from_spread(snap.spread_home_line)
+            else:
+                continue
+            if hw is None:
+                continue
+            side, wp = (g.home, hw) if hw >= 0.5 else (g.away, 1 - hw)
+            plan.append((g.id, side, round(wp, 4)))
+        skipped = len(games) - len(plan)
+    finally:
+        s.close()
+
+    if not plan:
+        print(f"close agent: nothing to pick ({len(games)} games in window, "
+              f"{skipped} already picked or unpriced)")
+        return (0, 0, skipped)
+    if dry:
+        for gid, side, wp in plan:
+            print(f"  would pick {side} ({wp*100:.1f}%) {gid}")
+        return (0, 0, skipped)
+
+    ok = fail = 0
+    for gid, side, wp in plan:
+        r = requests.post(f"{BASE}/picks", headers={"x-api-key": key},
+                          json={"game_id": gid, "market": "moneyline",
+                                "side": side, "stake_units": 1.0,
+                                "confidence": wp,
+                                "model_version": MODEL_VERSION,
+                                "mode": "live"}, timeout=30)
+        if r.status_code == 200:
+            ok += 1
+        else:
+            fail += 1
+            print(f"close agent: {side} {gid} failed {r.status_code} {r.text[:100]}")
+    print(f"close agent: submitted {ok}, failed {fail}, skipped {skipped}")
+    return (ok, fail, skipped)
 
 
 def main():

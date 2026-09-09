@@ -6,3 +6,4 @@ __pycache__/
 .env.*
 .admin_key_SAVE_THIS.txt
 .market_agent_key
+.close_agent_key

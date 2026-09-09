@@ -244,7 +244,15 @@ _sat = datetime(2026, 12, 26, 13, 0, tzinfo=_ET)    # late-season Saturday
 for _lab, _k in (("wednesday opener", _wed), ("monday night", _mon),
                  ("late-season saturday", _sat)):
     check(f"closing capture fires before a {_lab}",
-          [j for _, j in _fires_at(_k)] == ["snapshot"])
+          [j for _, j in _fires_at(_k)] == ["close_wave"])
+
+# The wave job captures the price and THEN buys at it. If that ever becomes a
+# plain snapshot again, the close agent silently stops picking.
+check("the wave job also submits the close picks",
+      "close_wave" in open("scheduler.py").read()
+      and "submit_close_wave" in open("scheduler.py").read())
+check("a failing agent cannot cost us the snapshot",
+      "close picks failed" in open("scheduler.py").read())
 
 _sun = _utc(2026, 9, 13, 13, 0)
 _when = (datetime(2026, 9, 13, 13, 0, tzinfo=_ET)

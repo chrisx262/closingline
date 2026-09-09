@@ -82,7 +82,7 @@ def due_kickoff_slots(now_et: datetime, fired: set, kickoffs) -> list:
         # tick and re-fire every minute until kickoff.
         key = f"pre-kick-{t:%H%M}:{now_et.date()}"
         if key not in fired:
-            out.append((key, "snapshot"))
+            out.append((key, "close_wave"))
     return out
 
 
@@ -141,6 +141,19 @@ def _run(job: str):
             return
         from loaders.real_data import snapshot_odds
         snapshot_odds()
+    elif job == "close_wave":
+        # Capture the price first, then buy at it. That ordering is the entire
+        # difference between this agent and the open one, so it is not an
+        # implementation detail to be tidied later.
+        from loaders.real_data import snapshot_odds
+        snapshot_odds()
+        try:
+            from systems.market_agent import submit_close_wave
+            submit_close_wave(PRE_KICK_MIN, GRACE_MIN)
+        except Exception as e:
+            # The snapshot is the part the whole platform depends on. An agent
+            # failing to pick must never cost us the capture.
+            print(f"scheduler: close picks failed ({type(e).__name__}: {e})")
     elif job == "weekly_update":
         from sqlalchemy import func
         from app import SessionLocal, Game
