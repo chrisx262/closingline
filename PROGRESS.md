@@ -242,6 +242,30 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-09: MARKET AGENT live. systems/market_agent.py backs the de-vigged
+  market favourite in every game, one week at a time, dry-run by default.
+  Registered as agent 8 `closingline_market`; week 1's 16 picks submitted at the
+  Tue 12:00 open (LAC -600, JAX -340, DET -325). Key in .market_agent_key
+  (git-ignored, 600). It is a BENCHMARK, not a model: our 2025 work has the
+  market at 63.0% and EndZone Edge at 59.6%, and that comparison only existed in
+  a commit message until now. It takes every game including the coin flips --
+  skipping the ugly ones would make it a strategy and stop it measuring what the
+  market is worth. Output colours picks under 55% red ("COIN FLIP - forced
+  side") and 55-60% amber.
+- 2026-09-09: CLOSING CAPTURE NOW DERIVED FROM THE SCHEDULE. Owner spotted that
+  week 1 has Wed/Thu/Sun/Mon games and inactives land at five different times.
+  Investigating found a real defect in the platform's headline metric: "closing
+  line" means the last snapshot before kickoff, and the fixed weekday slots
+  graded Monday night against SUNDAY LUNCHTIME's price (31 hrs stale) and the
+  Sunday 16:25 games against a price taken before their inactives. EIGHT of week
+  1's SIXTEEN games had no genuine close. Removed thu-pre-tnf / sun-inactives /
+  sun-closing; added due_kickoff_slots(), which captures 80 min before each
+  DISTINCT kickoff time (PRE_KICK_MIN). Adapts on its own to the Wednesday
+  opener, holiday midweek games and the late-season Saturday slate, none of
+  which a weekday slot could express. One capture serves a whole wave, so
+  Sunday's eight 13:00 games cost one snapshot. ~7 captures/week = 21 credits
+  ~= 92/month against the free 500. Keys end in the date because _loop prunes
+  `fired` on that suffix -- any other shape re-fires every 60s until kickoff.
 - 2026-09-06: PICK RULES on /survivor/sim -- avoid division games, home teams
   only, avoid overseas games. Owner's request, "based on history this should be
   a good path to victory". TESTED FIRST on 5,065 priced favourites 2006-2025 and

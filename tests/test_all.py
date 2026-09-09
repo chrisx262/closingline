@@ -211,11 +211,55 @@ check("slot never fires twice same day",
       scheduler.due_slots(_tue, {f"tue-open:{_tue.date()}"}) == [])
 check("outside grace window fires nothing",
       scheduler.due_slots(datetime(2025, 11, 4, 12, 20), set()) == [])
-check("sun 11:40 fires post-inactives snapshot",
-      [j for _, j in scheduler.due_slots(datetime(2025, 11, 9, 11, 40),
-                                         set())] == ["snapshot"])
-check("wednesday fires nothing",
+check("wednesday fires no FIXED slot",
       scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
+
+# The closing capture is derived from the schedule, not pinned to a weekday.
+# Fixed slots could not cover a Wednesday opener, holiday midweek games or the
+# late-season Saturday slate, and they graded Monday night against Sunday
+# lunchtime's price.
+from zoneinfo import ZoneInfo as _Z  # noqa: E402
+_ET = _Z("America/New_York")
+
+
+def _utc(y, mo, d, h, mi):
+    """An ET wall-clock time as the naive UTC the database stores."""
+    return datetime(y, mo, d, h, mi, tzinfo=_ET).astimezone(
+        _Z("UTC")).replace(tzinfo=None)
+
+
+def _fires_at(kick_et):
+    """Does a capture fire PRE_KICK_MIN before this kickoff?"""
+    fire = (kick_et - timedelta(minutes=scheduler.PRE_KICK_MIN))
+    return scheduler.due_kickoff_slots(
+        fire.replace(tzinfo=None),
+        set(),
+        [_utc(kick_et.year, kick_et.month, kick_et.day,
+              kick_et.hour, kick_et.minute)])
+
+
+_wed = datetime(2026, 9, 9, 20, 20, tzinfo=_ET)     # week 1 opens Wednesday
+_mon = datetime(2026, 9, 14, 20, 15, tzinfo=_ET)    # Monday night
+_sat = datetime(2026, 12, 26, 13, 0, tzinfo=_ET)    # late-season Saturday
+for _lab, _k in (("wednesday opener", _wed), ("monday night", _mon),
+                 ("late-season saturday", _sat)):
+    check(f"closing capture fires before a {_lab}",
+          [j for _, j in _fires_at(_k)] == ["snapshot"])
+
+_sun = _utc(2026, 9, 13, 13, 0)
+_when = (datetime(2026, 9, 13, 13, 0, tzinfo=_ET)
+         - timedelta(minutes=scheduler.PRE_KICK_MIN)).replace(tzinfo=None)
+check("one capture serves every game sharing a kickoff time",
+      len(scheduler.due_kickoff_slots(_when, set(), [_sun] * 8)) == 1)
+_key = scheduler.due_kickoff_slots(_when, set(), [_sun])[0][0]
+check("a fired capture does not repeat",
+      scheduler.due_kickoff_slots(_when, {_key}, [_sun]) == [])
+# _loop prunes `fired` on a today-date suffix; a key shaped otherwise would be
+# forgotten every tick and re-fire every minute until kickoff.
+check("capture key ends in the date, so the loop's prune keeps it",
+      _key.endswith(str(_when.date())))
+check("no capture when no kickoff is near",
+      scheduler.due_kickoff_slots(_when - timedelta(hours=5), set(), [_sun]) == [])
 check("scheduler off without RUN_SCHEDULER=1", scheduler.start() is False)
 
 # --- best bets: declaration, one-per-day, tiers --------------------------

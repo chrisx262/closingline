@@ -5,14 +5,27 @@ extra Railway cron services or dashboard config are needed. Times are
 defined in US Eastern and converted per-tick via zoneinfo, so DST is
 handled automatically (the season spans the November change).
 
-Cadence (from loaders/real_data.py) + the Tuesday grading run (README):
-  snapshots  Tue 12:00 / Thu 18:00 / Sat 12:00 / Sun 11:35 / Sun 12:45 ET
-  weekly     Tue 09:00 ET — weekly_update.py (refresh scores, grade picks)
+Cadence:
+  Tue 09:00 ET  weekly_update.py (refresh scores, grade picks)
+  Tue 12:00 ET  the week's opening capture
+  Sat 12:00 ET  a midweek reference point
+  ~80 min before EACH distinct kickoff time — the closing capture
 
-Budget: one snapshot covers all games and costs 3 Odds API credits
-(3 markets x 1 region — verified live). 5/week in-season ~= 66/month
-against the free tier's 500. Off-season the snapshot job is skipped
-entirely (no kickoff within the next 8 days).
+That last one is derived from the schedule rather than pinned to weekdays,
+because the NFL calendar will not sit still: week 1 opens on a WEDNESDAY,
+Thanksgiving and Christmas add midweek games, and Saturday slates appear late
+in the season once college football finishes. Fixed weekday slots missed all of
+those. Worse, they mis-measured CLV on the games they did miss: "closing line"
+here means the last snapshot taken before kickoff, so under the old fixed slots
+a Monday night game was graded against Sunday lunchtime's price, 31 hours stale,
+and the Sunday 16:25 games against a price taken before their inactives were
+even announced. Eight of week 1's sixteen games had no genuine close.
+
+Budget: one snapshot covers every game and costs 3 Odds API credits (3 markets
+x 1 region, verified live). A typical week is now Tue + Sat + about five kickoff
+waves (Thu, three on Sunday, Mon) = 7 captures = 21 credits, roughly 92/month
+against the free tier's 500. Off-season everything is skipped (no kickoff within
+8 days).
 """
 import os
 import threading
@@ -26,11 +39,13 @@ ET = ZoneInfo("America/New_York")
 SLOTS = [
     ("tue-grade",     1, 9,  0,  "weekly_update"),
     ("tue-open",      1, 12, 0,  "snapshot"),
-    ("thu-pre-tnf",   3, 18, 0,  "snapshot"),
     ("sat-midweek",   5, 12, 0,  "snapshot"),
-    ("sun-inactives", 6, 11, 35, "snapshot"),
-    ("sun-closing",   6, 12, 45, "snapshot"),
 ]
+
+# Minutes before kickoff for the closing capture. Inactives are published 90
+# minutes out, so 80 lands just after them and still comfortably before the
+# line is pulled.
+PRE_KICK_MIN = 80
 GRACE_MIN = 15  # a slot fires once anywhere in [t, t+15min) — survives restarts
 
 
@@ -47,6 +62,42 @@ def due_slots(now_et: datetime, fired: set) -> list:
                 and key not in fired:
             out.append((key, job))
     return out
+
+
+def due_kickoff_slots(now_et: datetime, fired: set, kickoffs) -> list:
+    """Which kickoff waves need their closing capture right now?
+
+    `kickoffs` is the naive-UTC kickoff times of unplayed games, passed in so
+    this stays a pure function and can be unit-tested without a database. One
+    capture serves every game sharing a kickoff time, so the eight games at
+    Sunday 13:00 cost one snapshot between them, not eight.
+    """
+    now_utc = now_et.replace(tzinfo=ET).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    lo = now_utc + timedelta(minutes=PRE_KICK_MIN)
+    hi = lo + timedelta(minutes=GRACE_MIN)
+    out = []
+    for t in sorted({k for k in kickoffs if lo <= k < hi}):
+        # The key must end in today's date: _loop prunes `fired` on that
+        # suffix, and a key shaped any other way would be forgotten every
+        # tick and re-fire every minute until kickoff.
+        key = f"pre-kick-{t:%H%M}:{now_et.date()}"
+        if key not in fired:
+            out.append((key, "snapshot"))
+    return out
+
+
+def _upcoming_kickoffs():
+    from app import SessionLocal, Game
+    s = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        return [r[0] for r in s.query(Game.kickoff).filter(
+            Game.final == False,  # noqa: E712
+            Game.kickoff >= now,
+            Game.kickoff <= now + timedelta(days=1),
+        ).distinct().all()]
+    finally:
+        s.close()
 
 
 def _season_active() -> bool:
@@ -105,7 +156,12 @@ def _loop():
     fired = set()
     while True:
         now_et = datetime.now(ET).replace(tzinfo=None)
-        for key, job in due_slots(now_et, fired):
+        due = due_slots(now_et, fired)
+        try:
+            due += due_kickoff_slots(now_et, fired, _upcoming_kickoffs())
+        except Exception as e:   # a DB hiccup must not stop the fixed slots
+            print(f"scheduler: kickoff lookup failed ({e})")
+        for key, job in due:
             fired.add(key)
             print(f"scheduler: firing {key} ({job})")
             started = datetime.utcnow()
