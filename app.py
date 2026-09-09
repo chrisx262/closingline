@@ -1264,6 +1264,50 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
             }}
 
 
+@app.get("/data/picks/pending")
+def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
+    """Every live pick on a game that has not kicked off yet.
+
+    The platform's claim is picks with receipts, and until now a pick was
+    invisible until after it was graded -- which is precisely when it stops
+    being a prediction. Nobody could verify that a pick was made before the
+    line moved, only that it existed afterwards. Picks are immutable and
+    timestamped server-side, so the record was always honest; it just could not
+    be seen. This is the seeing.
+
+    Backtest picks are excluded: they are replayed against history and putting
+    them beside live positions would misrepresent both (invariant 4).
+    """
+    now = datetime.utcnow()
+    q = (s.query(Pick, Game, Agent)
+           .join(Game, Game.id == Pick.game_id)
+           .join(Agent, Agent.id == Pick.agent_id)
+           .filter(Pick.mode == "live", Game.kickoff > now))
+    if season:
+        q = q.filter(Game.season == season)
+    rows = q.order_by(Game.kickoff, Agent.name).all()
+
+    by_agent: dict = {}
+    for p, g, a in rows:
+        e = by_agent.setdefault(a.name, {"agent": a.name, "kind": a.kind,
+                                         "picks": []})
+        e["picks"].append({
+            "game_id": g.id, "week": g.week, "kickoff": g.kickoff.isoformat(),
+            "away": g.away, "home": g.home,
+            "side": p.side, "market": p.market,
+            "odds": p.snap_odds, "line": p.snap_line,
+            "confidence": p.confidence,
+            "submitted_at": p.submitted_at.isoformat(),
+            "best_bet": bool(p.best_bet),
+        })
+    agents = sorted(by_agent.values(), key=lambda x: -len(x["picks"]))
+    return {"as_of": now.isoformat(), "open_picks": len(rows),
+            "agents": agents,
+            "note": ("Live picks on games that have not started. Picks are "
+                     "immutable once submitted — this is the receipt, not a "
+                     "preview.")}
+
+
 @app.get("/data/trends")
 def trends(season: Optional[int] = None, s: Session = Depends(db)):
     """Season-wide situational splits from real graded games."""

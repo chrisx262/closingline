@@ -406,6 +406,22 @@ check("response says how the prior was built",
 check("prior note warns it is not a market price",
       "not a market price" in full.get("prior", {}).get("note", ""))
 
+# A pick that only becomes visible after grading is not a receipt -- by then it
+# has stopped being a prediction. Open positions must be public before kickoff.
+_pp = c.get("/data/picks/pending")
+check("pending picks endpoint 200", _pp.status_code == 200)
+_ppd = _pp.json()
+check("pending picks are grouped by agent", "agents" in _ppd and "open_picks" in _ppd)
+check("backtest picks never appear beside live ones",
+      'Pick.mode == "live"' in inspect.getsource(__import__("app").pending_picks))
+check("only games that have not kicked off are shown",
+      "Game.kickoff > now" in inspect.getsource(__import__("app").pending_picks))
+_ml = c.get("/moneyline")
+check("moneyline page shows open picks above the leaderboard",
+      'id="openwrap"' in _ml.text and "On the board right now" in _ml.text)
+check("open picks flag when both sides of a game are taken",
+      "both sides taken" in _ml.text)
+
 sp = c.get("/survivor")
 check("survivor page 200", sp.status_code == 200)
 check("survivor page carries the RG footer", "1-800-GAMBLER" in sp.text)

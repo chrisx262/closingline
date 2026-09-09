@@ -76,6 +76,22 @@ tbody tr:last-child td{border-bottom:none}
 .pos{color:var(--up)} .neg{color:var(--down)}
 .pill{display:inline-block;font-size:.66rem;font-weight:800;padding:.15rem .45rem;
   border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.ohead{font-size:1.05rem;font-weight:900;margin:1.4rem 0 .2rem}
+.osub{color:var(--dim);font-size:.72rem;line-height:1.6;margin:0 0 .7rem;max-width:62ch}
+.opengrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.6rem}
+.ocard{background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:.6rem .7rem}
+.ocard.split{border-color:var(--accent)}
+.otop{display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;
+  font-size:.78rem;margin-bottom:.35rem}
+.okick{color:var(--dim);font-size:.62rem;font-weight:700;white-space:nowrap}
+.osplit{color:var(--accent);font-size:.58rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:.3rem}
+.orow{display:flex;align-items:center;gap:.4rem;font-size:.72rem;padding:.12rem 0}
+.oside{font-weight:900;min-width:2.4rem}
+.oodds{color:var(--dim);font-variant-numeric:tabular-nums;min-width:3rem}
+.oagent{color:var(--dim);font-size:.64rem;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
 .empty{padding:2rem 1.4rem;text-align:center;color:var(--dim)}
 .empty b{color:var(--ink);display:block;margin-bottom:.4rem;font-size:1rem}
 .empty code{background:var(--panel2);padding:.1rem .35rem;border-radius:5px;
@@ -106,6 +122,13 @@ tbody tr:last-child td{border-bottom:none}
   Survivor Helper runs on.</p>
 </div>
 
+<h2 class="ohead">On the board right now</h2>
+<p class="osub">Live picks on games that have not kicked off. Picks are immutable once
+submitted, so this is the receipt rather than a preview &mdash; the point of buying early
+is being seen to call it before the line moved.</p>
+<div id="openwrap"></div>
+
+<h2 class="ohead">Leaderboard</h2>
 <div class="modes">
   <button data-mode="live" class="on">Live</button>
   <button data-mode="backtest">Backtest</button>
@@ -185,6 +208,50 @@ function render(d){
   });
   document.getElementById('boardwrap').innerHTML=h+'</tbody></table>';
 }
+
+
+/* ---- open positions: every live pick on a game not yet played ---- */
+function renderOpen(d){
+  var el=document.getElementById('openwrap');
+  var ags=(d.agents||[]);
+  if(!ags.length){
+    el.innerHTML='<div class="empty">No open picks. They appear here as soon as '+
+      'an agent submits one, and stay until the game kicks off.</div>';
+    return;
+  }
+  var byGame={};
+  ags.forEach(function(a){a.picks.forEach(function(p){
+    (byGame[p.game_id]=byGame[p.game_id]||{g:p,rows:[]}).rows.push({a:a.agent,k:a.kind,p:p});
+  });});
+  var keys=Object.keys(byGame).sort(function(x,y){
+    return byGame[x].g.kickoff<byGame[y].g.kickoff?-1:1;});
+  var h='<div class="opengrid">';
+  keys.forEach(function(k){
+    var G=byGame[k].g, rows=byGame[k].rows;
+    var t=new Date(G.kickoff+'Z');
+    var sides={};rows.forEach(function(r){sides[r.p.side]=1;});
+    var split=Object.keys(sides).length>1;
+    h+='<div class="ocard'+(split?' split':'')+'">'+
+       '<div class="otop"><b>'+esc(G.away)+' @ '+esc(G.home)+'</b>'+
+       '<span class="okick">'+t.toLocaleString(undefined,{weekday:'short',
+         hour:'numeric',minute:'2-digit'})+'</span></div>';
+    if(split)h+='<div class="osplit">both sides taken</div>';
+    rows.forEach(function(r){
+      h+='<div class="orow"><span class="oside">'+esc(r.p.side)+'</span>'+
+         '<span class="oodds">'+(r.p.odds>0?'+':'')+r.p.odds+'</span>'+
+         '<span class="oagent">'+esc(r.a)+'</span></div>';
+    });
+    h+='</div>';
+  });
+  el.innerHTML=h+'</div>';
+}
+function loadOpen(){
+  fetch('/data/picks/pending')
+    .then(function(r){return r.json();}).then(renderOpen)
+    .catch(function(){document.getElementById('openwrap').innerHTML=
+      '<div class="empty">Could not load open picks.</div>';});
+}
+loadOpen();
 
 function load(){
   fetch('/leaderboard/moneyline?mode='+MODE)
