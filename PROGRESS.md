@@ -242,6 +242,26 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-09 (overnight, owner asleep): items 1-4 of the agreed list DONE and
+  deployed. (1) deploy. (2) `closingline_market` renamed `closingline_open` via
+  scripts/rename_agent.py, which REFUSES to rename an agent holding graded picks
+  -- done before Tuesday's grading while all 16 were pending. (3) `closingline_
+  close` registered as agent 9, key in Railway var CLOSE_AGENT_KEY and local
+  .close_agent_key (both git-ignored); it submits inside the scheduler's
+  close_wave job, which captures the price THEN buys at it. Armed for tonight's
+  7:00pm ET wave; dry run confirmed it isolates the Wednesday opener only.
+  (4) /data/picks/pending + an "On the board right now" section on /moneyline.
+  Live on prod: 23 open picks, and it flags the SEVEN games where AlbanyRooks
+  has taken the opposite side to closingline_open. Suite 317 -> 325.
+- 2026-09-09: ENDZONE MIN_WEEK IS WRONG, measured on 2011-2025 with the model's
+  own method. Weeks 1-6: last season's ratings 62.2% vs this season's 57.5%
+  (-4.7, +/-2.9). Weeks 7-18: last season 59.0% vs this season 65.3% (+6.3,
+  +/-2.0). The split is clean -- last season wins all six early weeks and loses
+  all twelve later ones -- so the crossover is WEEK 7, not week 5. Two
+  consequences: MIN_WEEK=5 hands over two weeks early, and sitting silent in
+  weeks 1-4 throws away the BETTER input rather than a worse one. Recorded in
+  the file as a comment only; v1's behaviour is frozen while it races v2, and
+  the owner is wiring v2 himself.
 - 2026-09-09: MARKET AGENT live. systems/market_agent.py backs the de-vigged
   market favourite in every game, one week at a time, dry-run by default.
   Registered as agent 8 `closingline_market`; week 1's 16 picks submitted at the

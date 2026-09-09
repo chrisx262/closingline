@@ -67,6 +67,14 @@ sys.path.insert(0, ".")
 W_OFF = 0.70          # frozen: fitted on 2024 in the EndZone harness
 HFA = 0.4             # frozen: same fit
 MIN_WEEK = 5          # rolling stats need a few weeks to mean anything
+# MEASURED 2026-09-09, 2011-2025, this model's own method (see PROGRESS.md):
+#   weeks 1-6   last season's ratings 62.2%  vs this season's 57.5%   (-4.7)
+#   weeks 7-18  last season's ratings 59.0%  vs this season's 65.3%   (+6.3)
+# The crossover is week 7, not week 5, and it is clean -- last season wins all
+# six early weeks and loses all twelve later ones. So MIN_WEEK=5 hands over two
+# weeks too early, and staying silent through weeks 1-4 discards the BETTER
+# input rather than a worse one. Not changed here: this file is v1 and its
+# behaviour is frozen while it races v2. The owner is wiring v2 himself.
 TEST_SEASON = 2025
 AGENT_NAME = "endzone_edge_v1"
 
