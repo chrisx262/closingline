@@ -6,7 +6,8 @@ defined in US Eastern and converted per-tick via zoneinfo, so DST is
 handled automatically (the season spans the November change).
 
 Cadence:
-  Tue 09:00 ET  weekly_update.py (refresh scores, grade picks)
+  Tue 09:00 ET  weekly_update.py (scores, grading, weekly rank snapshot)
+  01:30 / 08:00 / 17:00 / 23:30 ET, EVERY DAY  scores + grading only
   Tue 12:00 ET  the week's opening capture
   Sat 12:00 ET  a midweek reference point
   ~80 min before EACH distinct kickoff time — the closing capture
@@ -35,8 +36,14 @@ from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
 
-# (name, weekday Mon=0, hour, minute, job)
+# (name, weekday Mon=0 or None for every day, hour, minute, job)
 SLOTS = [
+    # Scores, several times a day and on any day, because games are played on
+    # six of them. Free: this reads a CSV from nflverse, not the odds feed.
+    ("scores-early", None, 1, 30, "scores"),
+    ("scores-morn",  None, 8, 0,  "scores"),
+    ("scores-aft",   None, 17, 0, "scores"),
+    ("scores-late",  None, 23, 30, "scores"),
     ("tue-grade",     1, 9,  0,  "weekly_update"),
     ("tue-open",      1, 12, 0,  "snapshot"),
     ("sat-midweek",   5, 12, 0,  "snapshot"),
@@ -54,7 +61,7 @@ def due_slots(now_et: datetime, fired: set) -> list:
     `fired` holds '<name>:<date>' keys of slots already run."""
     out = []
     for name, wd, hh, mm, job in SLOTS:
-        if now_et.weekday() != wd:
+        if wd is not None and now_et.weekday() != wd:
             continue
         start = now_et.replace(hour=hh, minute=mm, second=0, microsecond=0)
         key = f"{name}:{now_et.date()}"
@@ -158,6 +165,17 @@ def _run(job: str):
             # The snapshot is the part the whole platform depends on. An agent
             # failing to pick must never cost us the capture.
             print(f"scheduler: close picks failed ({type(e).__name__}: {e})")
+    elif job == "scores":
+        # Results and grading only. No rank snapshot -- that is weekly by
+        # design and taking it daily would break the movement arrows.
+        from sqlalchemy import func
+        from app import SessionLocal, Game
+        import weekly_update
+        s = SessionLocal()
+        season = s.query(func.max(Game.season)).scalar()
+        s.close()
+        if season:
+            weekly_update.refresh_and_grade(season)
     elif job == "weekly_update":
         from sqlalchemy import func
         from app import SessionLocal, Game

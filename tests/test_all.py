@@ -211,6 +211,26 @@ check("slot never fires twice same day",
       scheduler.due_slots(_tue, {f"tue-open:{_tue.date()}"}) == [])
 check("outside grace window fires nothing",
       scheduler.due_slots(datetime(2025, 11, 4, 12, 20), set()) == [])
+# Results used to wait for Tuesday, so a Wednesday-night pick sat in "in play"
+# for five days. Scores are a free CSV pull, so they run several times a day.
+check("score slots fire on any day of the week",
+      any(wd is None for _n, wd, _h, _m, _j in scheduler.SLOTS))
+for _h, _m in ((1, 30), (8, 0), (17, 0), (23, 30)):
+    check(f"scores run at {_h:02d}:{_m:02d} on a Thursday",
+          [j for _, j in scheduler.due_slots(datetime(2026, 9, 10, _h, _m),
+                                             set())] == ["scores"])
+check("an ordinary hour still fires nothing",
+      scheduler.due_slots(datetime(2026, 9, 10, 14, 0), set()) == [])
+# The rank snapshot drives the weekly movement arrows. Taking it four times a
+# day would turn "moved since last week" into "moved since this morning".
+import weekly_update as _wu  # noqa: E402
+check("the frequent job grades but does not take the rank snapshot",
+      "snapshot_ranks" not in inspect.getsource(_wu.refresh_and_grade))
+check("the weekly job still takes it",
+      "snapshot_ranks" in inspect.getsource(_wu.run))
+check("grading only ever touches games already final",
+      "Game.final == True" in inspect.getsource(_wu.refresh_and_grade))
+
 check("wednesday fires no FIXED slot",
       scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
 

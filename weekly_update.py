@@ -21,7 +21,20 @@ from app import SessionLocal, Pick, Game                      # noqa: E402
 from app import grade_all                                     # noqa: E402
 
 
-def run(season: int = 2026):
+def refresh_and_grade(season: int = 2026):
+    """Pull scores and grade anything now final. Safe to run often.
+
+    Split out of run() so results can land within hours of a game instead of
+    waiting for Tuesday. A pick vanished into "in play" on Wednesday night and
+    sat there until the weekly run, which is a strange thing for a results
+    platform to do. Grading only ever touches games nflverse has scored, so
+    running it more often settles finished games sooner and cannot touch one
+    still being played.
+
+    Deliberately does NOT take the rank snapshot: that drives the weekly
+    movement arrows on the board, and taking it daily would turn "moved since
+    last week" into "moved since this morning".
+    """
     load([season], wipe=False)          # refresh scores, keep existing picks
     s = SessionLocal()
     pending = (s.query(Pick).join(Game, Pick.game_id == Game.id)
@@ -39,8 +52,13 @@ def run(season: int = 2026):
         s.commit()
         s.close()
         print(f"graded {len(rows)} picks")
-    else:
-        print("nothing to grade")
+        return len(rows)
+    print("nothing to grade")
+    return 0
+
+
+def run(season: int = 2026):
+    refresh_and_grade(season)
 
     # weekly board-position snapshot → powers the ▲▼ movement arrows on /
     from app import snapshot_ranks
