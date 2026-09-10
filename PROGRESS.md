@@ -242,6 +242,33 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-10: RESULTS NOW LAND WITHIN HOURS, not on Tuesday. weekly_update
+  split: refresh_and_grade() pulls nflverse scores and settles anything final,
+  and runs 01:30/08:00/17:00/23:30 ET EVERY DAY (games fall on six of them).
+  Free -- a GitHub CSV, not the odds feed. It deliberately does NOT take the
+  rank snapshot; that stays weekly or the board's movement arrows silently
+  become "moved since this morning". Scheduler slots now accept wd=None for
+  any-day. Verified end to end on prod: the opener graded NE 10 @ SEA 13,
+  final=True, and BOTH market agents settled as WINS (open SEA -175, close SEA
+  -172). Neither shows on the moneyline board yet -- min_picks is 5.
+- 2026-09-10: /data/slate and /data/trends were season-blind. slate() filtered
+  by season only when one was passed and the explorer never passes one, so week
+  1 returned 32 games -- 2025's and 2026's interleaved, LAST YEAR'S FIRST -- and
+  the page rendered history as this week's card. Owner spotted it. Both now use
+  a shared current_season() (the season holding the next unplayed game, else the
+  most recent loaded). The explorer also prints "Season 2026 - week N" above the
+  week nav; the label matters more than the fix, because the page was wrong for
+  a while and nothing on it looked wrong.
+- 2026-09-10: the pending-picks board keeps a pick until it is GRADED, labelled
+  "open" or "in play" with the score once known. It used to drop at kickoff, so
+  a pick went invisible exactly when someone wanted to watch it.
+- 2026-09-10: close-capture timing was 15 min early. due_kickoff_slots fired on
+  the first tick where kickoff came within PRE_KICK_MIN + GRACE, i.e. always at
+  the FAR edge (95 min), five minutes BEFORE the 90-minute inactives it exists
+  to wait for. Window inverted to [PRE_KICK_MIN - GRACE, PRE_KICK_MIN], boundary
+  inclusive. Three tests now pin the TIMING (fires <= PRE_KICK_MIN, lands inside
+  the inactives window, not so late the line risks being pulled) -- the old ones
+  only checked that something fired, which is why this got through.
 - 2026-09-09 (overnight, owner asleep): items 1-4 of the agreed list DONE and
   deployed. (1) deploy. (2) `closingline_market` renamed `closingline_open` via
   scripts/rename_agent.py, which REFUSES to rename an agent holding graded picks
