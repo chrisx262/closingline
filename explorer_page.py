@@ -12,6 +12,8 @@ h1{font-size:1.7rem;margin:0}h1 span{color:var(--accent)}
 h1 a{color:inherit;text-decoration:none}
 p.sub{color:var(--dim);margin:.2rem 0 0;font-size:.92rem}
 main{max-width:1020px;margin:auto;padding:0 1.5rem 3rem}
+.seasonbar{color:#5b6570;font-size:.7rem;font-weight:700;margin:.2rem 0 .5rem}
+.seasonbar b{color:#101418;font-weight:900}
 .trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
 gap:.7rem;margin:1.1rem 0}
 .tcard{background:var(--card);border:1px solid var(--line);padding:.8rem .9rem}
@@ -46,6 +48,7 @@ border:1px dashed var(--line)}
 situations, see how the season actually went.</p></header>
 <main>
 <div class="trends" id="trends"></div>
+<div class="seasonbar" id="seasonbar"></div>
 <div class="weeknav" id="weeknav"></div>
 <div class="filters" id="filters">
  <label><input type="checkbox" value="DIV" onchange="draw()"> DIVISION</label>
@@ -75,6 +78,14 @@ async function go(w){
  WEEK=w;
  for(let i=1;i<=18;i++)document.getElementById('w'+i).className=i===w?'on':'';
  DATA=await (await fetch('/data/slate?week='+w)).json();
+ /* Say which season this is. The slate used to return every season's week N,
+    so this page showed last year's games with nothing on screen admitting it.
+    A label is cheap and makes the same mistake impossible to make silently. */
+ const bar=document.getElementById('seasonbar');
+ if(bar){
+   const yr=DATA.length?String(DATA[0].game_id).slice(0,4):null;
+   bar.innerHTML=yr?('Season <b>'+yr+'</b> &middot; week '+w):'';
+ }
  draw();
 }
 function draw(){

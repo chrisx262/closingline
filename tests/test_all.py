@@ -428,6 +428,18 @@ check("prior note warns it is not a market price",
 
 # A pick that only becomes visible after grading is not a receipt -- by then it
 # has stopped being a prediction. Open positions must be public before kickoff.
+# /data/slate used to return EVERY season's week N when no season was given,
+# so the explorer asked for week 1 and got 2025's games listed before 2026's.
+_sl = c.get("/data/slate?week=1").json()
+check("slate returns one season, not all of them",
+      len({str(g["game_id"])[:4] for g in _sl}) <= 1)
+check("slate defaults to the season in play",
+      "current_season(s)" in inspect.getsource(__import__("app").slate))
+check("trends defaults to one season too",
+      "current_season(s)" in inspect.getsource(__import__("app").trends))
+check("the explorer says which season it is showing",
+      'id="seasonbar"' in c.get("/explorer").text)
+
 _pp = c.get("/data/picks/pending")
 check("pending picks endpoint 200", _pp.status_code == 200)
 _ppd = _pp.json()

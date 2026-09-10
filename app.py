@@ -1102,11 +1102,30 @@ def _game_ctx(s: Session, g: Game):
     return ctx
 
 
+def current_season(s: Session) -> Optional[int]:
+    """The season in play: the one holding the next unplayed game, or the most
+    recent one loaded once a season is over. Several endpoints need to agree on
+    this, and each inventing its own answer is how a page ends up showing last
+    year without saying so."""
+    nxt = (s.query(Game).filter(Game.final == False)  # noqa: E712
+             .order_by(Game.kickoff).first())
+    if nxt:
+        return nxt.season
+    last = s.query(Game).order_by(Game.season.desc()).first()
+    return last.season if last else None
+
+
 @app.get("/data/slate")
 def slate(week: int, season: Optional[int] = None, s: Session = Depends(db)):
-    q = s.query(Game).filter(Game.week == week)
-    if season:
-        q = q.filter(Game.season == season)
+    """One week's games. Defaults to the CURRENT season, not to all of them.
+
+    It used to return every season's week N when no season was given, so the
+    explorer asked for week 1 and got thirty-two games: 2025's and 2026's
+    interleaved, with last year's first. Anything reading the top of that list
+    was reading history and being told it was this week.
+    """
+    q = s.query(Game).filter(Game.week == week,
+                             Game.season == (season or current_season(s)))
     return [_game_ctx(s, g) for g in q.order_by(Game.kickoff)]
 
 
@@ -1320,7 +1339,11 @@ def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
 @app.get("/data/trends")
 def trends(season: Optional[int] = None, s: Session = Depends(db)):
     """Season-wide situational splits from real graded games."""
-    q = s.query(Game).filter(Game.final == True)
+    # Same trap as the slate: with no season this aggregated every finished
+    # game we hold. Harmless while only 2025 was final; silently mixes two
+    # seasons the moment 2026 games start landing.
+    season = season or current_season(s)
+    q = s.query(Game).filter(Game.final == True)  # noqa: E712
     if season:
         q = q.filter(Game.season == season)
     buckets = {
