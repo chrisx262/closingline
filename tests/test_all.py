@@ -223,13 +223,14 @@ check("an ordinary hour still fires nothing",
       scheduler.due_slots(datetime(2026, 9, 10, 14, 0), set()) == [])
 # The rank snapshot drives the weekly movement arrows. Taking it four times a
 # day would turn "moved since last week" into "moved since this morning".
+import inspect as _insp  # noqa: E402
 import weekly_update as _wu  # noqa: E402
 check("the frequent job grades but does not take the rank snapshot",
-      "snapshot_ranks" not in inspect.getsource(_wu.refresh_and_grade))
+      "snapshot_ranks" not in _insp.getsource(_wu.refresh_and_grade))
 check("the weekly job still takes it",
-      "snapshot_ranks" in inspect.getsource(_wu.run))
+      "snapshot_ranks" in _insp.getsource(_wu.run))
 check("grading only ever touches games already final",
-      "Game.final == True" in inspect.getsource(_wu.refresh_and_grade))
+      "Game.final == True" in _insp.getsource(_wu.refresh_and_grade))
 
 check("wednesday fires no FIXED slot",
       scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
