@@ -73,10 +73,14 @@ def due_kickoff_slots(now_et: datetime, fired: set, kickoffs) -> list:
     Sunday 13:00 cost one snapshot between them, not eight.
     """
     now_utc = now_et.replace(tzinfo=ET).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-    lo = now_utc + timedelta(minutes=PRE_KICK_MIN)
-    hi = lo + timedelta(minutes=GRACE_MIN)
+    # Fire on the first tick where kickoff is PRE_KICK_MIN away OR NEARER, not
+    # the first tick it comes within PRE_KICK_MIN + grace. Getting this backwards
+    # made the capture land 95 minutes out on the opener -- five minutes BEFORE
+    # the ninety-minute inactives, which is the one thing it exists to wait for.
+    lo = now_utc + timedelta(minutes=PRE_KICK_MIN - GRACE_MIN)
+    hi = now_utc + timedelta(minutes=PRE_KICK_MIN)
     out = []
-    for t in sorted({k for k in kickoffs if lo <= k < hi}):
+    for t in sorted({k for k in kickoffs if lo <= k <= hi}):
         # The key must end in today's date: _loop prunes `fired` on that
         # suffix, and a key shaped any other way would be forgotten every
         # tick and re-fire every minute until kickoff.

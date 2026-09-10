@@ -254,6 +254,26 @@ check("the wave job also submits the close picks",
 check("a failing agent cannot cost us the snapshot",
       "close picks failed" in open("scheduler.py").read())
 
+# Inactives drop 90 minutes out. Firing on the first tick within
+# PRE_KICK_MIN + grace put the opener's capture 95 minutes out -- five minutes
+# BEFORE the list it exists to wait for. It must fire at PRE_KICK_MIN or nearer.
+def _first_fire(kick_et):
+    _k = _utc(kick_et.year, kick_et.month, kick_et.day,
+              kick_et.hour, kick_et.minute)
+    for _m in range(120, 40, -1):
+        _now = (kick_et - timedelta(minutes=_m)).replace(tzinfo=None)
+        if scheduler.due_kickoff_slots(_now, set(), [_k]):
+            return _m
+    return None
+
+
+_thu = datetime(2026, 9, 10, 20, 35, tzinfo=_ET)
+_ff = _first_fire(_thu)
+check("closing capture fires no earlier than PRE_KICK_MIN before kickoff",
+      _ff is not None and _ff <= scheduler.PRE_KICK_MIN)
+check("closing capture lands after the 90-minute inactives", _ff is not None and _ff < 90)
+check("closing capture is not so late it risks the line being pulled", _ff >= 60)
+
 _sun = _utc(2026, 9, 13, 13, 0)
 _when = (datetime(2026, 9, 13, 13, 0, tzinfo=_ET)
          - timedelta(minutes=scheduler.PRE_KICK_MIN)).replace(tzinfo=None)
