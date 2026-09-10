@@ -1282,11 +1282,16 @@ def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
     q = (s.query(Pick, Game, Agent)
            .join(Game, Game.id == Pick.game_id)
            .join(Agent, Agent.id == Pick.agent_id)
-           .filter(Pick.mode == "live", Game.kickoff > now))
+           .filter(Pick.mode == "live",
+                   (Pick.result == None) | (Pick.result == "pending")))  # noqa: E711
     if season:
         q = q.filter(Game.season == season)
     rows = q.order_by(Game.kickoff, Agent.name).all()
 
+    # A pick used to disappear from here the moment its game kicked off, and
+    # scores only refresh on the Tuesday run, so it then stayed invisible for
+    # days -- gone exactly when someone most wants to watch it. Ungraded picks
+    # stay on the board and say which state they are in.
     by_agent: dict = {}
     for p, g, a in rows:
         e = by_agent.setdefault(a.name, {"agent": a.name, "kind": a.kind,
@@ -1299,13 +1304,17 @@ def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
             "confidence": p.confidence,
             "submitted_at": p.submitted_at.isoformat(),
             "best_bet": bool(p.best_bet),
+            "state": "open" if g.kickoff > now else "in play",
+            "away_score": g.away_score, "home_score": g.home_score,
         })
     agents = sorted(by_agent.values(), key=lambda x: -len(x["picks"]))
-    return {"as_of": now.isoformat(), "open_picks": len(rows),
-            "agents": agents,
-            "note": ("Live picks on games that have not started. Picks are "
-                     "immutable once submitted — this is the receipt, not a "
-                     "preview.")}
+    started = sum(1 for _p, g, _a in rows if g.kickoff <= now)
+    return {"as_of": now.isoformat(), "open_picks": len(rows) - started,
+            "in_play": started, "agents": agents,
+            "note": ("Live picks that have not been graded. 'open' means the "
+                     "game has not started; 'in play' means it has and the "
+                     "result is not in yet. Picks are immutable once "
+                     "submitted — this is the receipt, not a preview.")}
 
 
 @app.get("/data/trends")

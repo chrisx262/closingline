@@ -82,6 +82,9 @@ tbody tr:last-child td{border-bottom:none}
 .ocard{background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:.6rem .7rem}
 .ocard.split{border-color:var(--accent)}
+.ocard.live{background:var(--bg)}
+.inplay{color:var(--down);font-weight:900;font-size:.58rem;letter-spacing:.06em;
+  text-transform:uppercase}
 .otop{display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;
   font-size:.78rem;margin-bottom:.35rem}
 .okick{color:var(--dim);font-size:.62rem;font-weight:700;white-space:nowrap}
@@ -215,8 +218,8 @@ function renderOpen(d){
   var el=document.getElementById('openwrap');
   var ags=(d.agents||[]);
   if(!ags.length){
-    el.innerHTML='<div class="empty">No open picks. They appear here as soon as '+
-      'an agent submits one, and stay until the game kicks off.</div>';
+    el.innerHTML='<div class="empty">No picks on the board. They appear as soon '+
+      'as an agent submits one, and stay until the result is graded.</div>';
     return;
   }
   var byGame={};
@@ -231,10 +234,15 @@ function renderOpen(d){
     var t=new Date(G.kickoff+'Z');
     var sides={};rows.forEach(function(r){sides[r.p.side]=1;});
     var split=Object.keys(sides).length>1;
-    h+='<div class="ocard'+(split?' split':'')+'">'+
+    var live=G.state==='in play';
+    var score=(G.away_score!==null&&G.away_score!==undefined)
+      ? (' '+G.away_score+'-'+G.home_score) : '';
+    h+='<div class="ocard'+(split?' split':'')+(live?' live':'')+'">'+
        '<div class="otop"><b>'+esc(G.away)+' @ '+esc(G.home)+'</b>'+
-       '<span class="okick">'+t.toLocaleString(undefined,{weekday:'short',
-         hour:'numeric',minute:'2-digit'})+'</span></div>';
+       '<span class="okick">'+(live
+         ? ('<span class="inplay">in play</span>'+score)
+         : t.toLocaleString(undefined,{weekday:'short',hour:'numeric',
+             minute:'2-digit'}))+'</span></div>';
     if(split)h+='<div class="osplit">both sides taken</div>';
     rows.forEach(function(r){
       h+='<div class="orow"><span class="oside">'+esc(r.p.side)+'</span>'+

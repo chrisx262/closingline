@@ -434,8 +434,15 @@ _ppd = _pp.json()
 check("pending picks are grouped by agent", "agents" in _ppd and "open_picks" in _ppd)
 check("backtest picks never appear beside live ones",
       'Pick.mode == "live"' in inspect.getsource(__import__("app").pending_picks))
-check("only games that have not kicked off are shown",
-      "Game.kickoff > now" in inspect.getsource(__import__("app").pending_picks))
+# A pick vanished at kickoff and, since scores only refresh on Tuesday, stayed
+# invisible for days -- gone exactly when someone most wants to watch it.
+check("ungraded picks stay on the board after kickoff",
+      'Pick.result == "pending"' in inspect.getsource(__import__("app").pending_picks))
+check("each pick says whether it is open or in play",
+      '"state"' in inspect.getsource(__import__("app").pending_picks)
+      and '"in play"' in inspect.getsource(__import__("app").pending_picks))
+check("graded picks drop off the board",
+      "Pick.result == None" in inspect.getsource(__import__("app").pending_picks))
 _ml = c.get("/moneyline")
 check("moneyline page shows open picks above the leaderboard",
       'id="openwrap"' in _ml.text and "On the board right now" in _ml.text)
