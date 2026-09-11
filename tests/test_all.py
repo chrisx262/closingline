@@ -269,6 +269,33 @@ for _lab, _k in (("wednesday opener", _wed), ("monday night", _mon),
 
 # The wave job captures the price and THEN buys at it. If that ever becomes a
 # plain snapshot again, the close agent silently stops picking.
+# THE HANDOFF. The scheduler fires at exactly PRE_KICK_MIN before kickoff; the
+# agent then runs a moment later, by which point the game is a few seconds
+# NEARER. Its window used to start at now + PRE_KICK_MIN, so the game it had
+# just been woken for had already dropped out of the bottom of it. It picked
+# nothing, silently, while the job still reported ok -- and that is how the
+# Thursday-night close pick was lost. Test the seam, not each side of it.
+from systems.market_agent import submit_close_wave as _scw  # noqa: E402
+from app import Game as _G2  # noqa: E402
+import io as _io, contextlib as _ctx  # noqa: E402
+
+_g = (SessionLocal().query(_G2).filter(_G2.final == False)  # noqa: E712
+      .order_by(_G2.kickoff).first())
+if _g is not None:
+    _fire = _g.kickoff - timedelta(minutes=scheduler.PRE_KICK_MIN)
+    _found = []
+    for _delay in (0, 5, 45):
+        _buf = _io.StringIO()
+        with _ctx.redirect_stdout(_buf):
+            _scw(scheduler.PRE_KICK_MIN, scheduler.GRACE_MIN, dry=True,
+                 now=_fire + timedelta(seconds=_delay))
+        _found.append(sum(1 for ln in _buf.getvalue().splitlines()
+                          if "would pick" in ln))
+    check("the agent finds the game the scheduler woke it for",
+          all(n > 0 for n in _found))
+check("the agent's window starts at now, not at now + PRE_KICK_MIN",
+      "lo = now\n" in _insp.getsource(_scw))
+
 check("the wave job also submits the close picks",
       "close_wave" in open("scheduler.py").read()
       and "submit_close_wave" in open("scheduler.py").read())

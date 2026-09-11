@@ -103,7 +103,7 @@ def week_picks(week, season=None):
 
 
 # ------------------------------------------------------------ close agent
-def submit_close_wave(minutes_ahead, window_min, dry=False):
+def submit_close_wave(minutes_ahead, window_min, dry=False, now=None):
     """Back the market favourite in every game kicking off in ~minutes_ahead.
 
     Run by the scheduler immediately AFTER the closing snapshot, so the price
@@ -119,14 +119,29 @@ def submit_close_wave(minutes_ahead, window_min, dry=False):
     from app import (SessionLocal, Game, Pick, Agent, snapshot_at,
                      devig_two_way, wp_from_spread)
 
+    # The key is only needed to SUBMIT. Checking it up here meant a dry run
+    # needed credentials to tell you what it would do, which also made the one
+    # thing worth testing -- that it finds the right games -- untestable.
     key = os.environ.get("CLOSE_AGENT_KEY")
-    if not key:
+    if not key and not dry:
         print("close agent: CLOSE_AGENT_KEY not set — skipping")
         return (0, 0, 0)
 
-    now = datetime.utcnow()
-    lo = now + timedelta(minutes=minutes_ahead)
-    hi = lo + timedelta(minutes=window_min)
+    now = now or datetime.utcnow()   # injectable so the handoff can be tested
+    # Look FORWARD from now, not outward from now + minutes_ahead.
+    #
+    # The scheduler fires this at exactly minutes_ahead before kickoff, so by
+    # the time the snapshot finishes and this runs, the game is a few seconds
+    # NEARER than that. The old window started at now + minutes_ahead, so the
+    # game it was woken up for had already fallen out of the bottom of it and
+    # the agent picked nothing at all -- silently, with the job still
+    # reporting ok. That cost the Thursday-night close pick.
+    #
+    # Waves are hours apart (Sunday's are 13:00, 16:25, 20:20), so a window
+    # this wide cannot reach into the next one, and a game already held is
+    # skipped below regardless.
+    lo = now
+    hi = now + timedelta(minutes=minutes_ahead + window_min)
     s = SessionLocal()
     try:
         games = (s.query(Game)
