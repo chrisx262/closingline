@@ -4,8 +4,14 @@ Uses the synthetic season (has an upcoming week) + checks real-loader
 timezone handling. Exits nonzero on any failure.
 """
 
-import inspect          # used by checks throughout; imported here so adding a
-                       # test near the top of the file cannot NameError on it
+# Stdlib the checks lean on, all imported here. Three separate runs have been
+# lost to a NameError from adding a test above where one of these used to be
+# imported further down the file.
+import inspect
+import os
+import re
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timedelta
 
@@ -203,6 +209,32 @@ check("no match beyond 36h",
       _match_game(_games, "KC", "BUF", datetime(2025, 11, 8, 18, 0)) is None)
 check("no match wrong teams",
       _match_game(_games, "PHI", "DAL", datetime(2025, 11, 2, 18, 0)) is None)
+
+# --- every page's JS must survive a real browser -----------------------
+# /circa shipped broken and the old harness passed it, because that harness
+# returned a fake element for every getElementById. A browser returns null. The
+# core's last line is renderEntries();load(); and on a page with no entry
+# manager that threw, killing the rest of the shared <script> block -- so the
+# page sat on "Loading..." with its own code never reached.
+if shutil.which("node"):
+    import tempfile as _tf  # noqa: E402
+    _dir = _tf.mkdtemp()
+    _pages = ["/", "/survivor", "/survivor/sim", "/moneyline", "/circa",
+              "/explorer", "/picks-board"]
+    _files = []
+    for _u in _pages:
+        _n = (_u.strip("/").replace("/", "_") or "board") + ".html"
+        _p = os.path.join(_dir, _n)
+        with open(_p, "w") as _f:
+            _f.write(c.get(_u).text)
+        _files.append(_p)
+    _r = subprocess.run(["node", "tests/check_pages.js"] + _files,
+                        capture_output=True, text=True)
+    check("every page's JavaScript runs without throwing "
+          "(" + (_r.stdout.strip().splitlines() or ["no output"])[-1] + ")",
+          _r.returncode == 0)
+else:
+    print("SKIP  page JavaScript smoke test (node not installed)")
 
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
@@ -620,12 +652,11 @@ check("greedy honours the same rules, or the columns are not comparable",
 
 # The overseas list is hardcoded on the page. If it drifts from the schedule
 # every recommendation built on it is wrong, and it would fail silently.
-import re as _re  # noqa: E402
 from app import Game as _Game  # noqa: E402
-_intl = _re.search(r"var INTL=\[(.*?)\];", simp.text, re.S if False else _re.S)
+_intl = re.search(r"var INTL=\[(.*?)\];", simp.text, re.S if False else re.S)
 check("the overseas game list is declared", _intl is not None)
 if _intl:
-    _pairs = _re.findall(r"\[(\d+),'([A-Z]+)','([A-Z]+)'\]", _intl.group(1))
+    _pairs = re.findall(r"\[(\d+),'([A-Z]+)','([A-Z]+)'\]", _intl.group(1))
     check("the overseas list is populated", len(_pairs) == 8)
     _ss = SessionLocal()
     _seasons = [x[0] for x in _ss.query(_Game.season).distinct().all()]
@@ -653,7 +684,6 @@ check("best path warns it is not a script to follow",
 
 # The assignment solver is the kind of code that stays plausible while being
 # wrong, so it is checked against brute force on random instances.
-import shutil, subprocess  # noqa: E402
 if shutil.which("node"):
     _r = subprocess.run(["node", "tests/check_hungarian.js", "survivor_sim_page.py"],
                         capture_output=True, text=True)
@@ -727,7 +757,6 @@ check("weeks-ahead count is split into market vs estimated",
 # The page hardcodes the two holiday legs. If the NFL schedule in the database
 # disagrees with them, every reservation the tool recommends is wrong -- and it
 # would fail silently, which is the worst way for this particular thing to break.
-import re  # noqa: E402
 from app import Game  # noqa: E402
 
 legs_js = re.search(r"var HOLIDAY_LEGS=\[(.*?)\n\];", sp.text, re.S)

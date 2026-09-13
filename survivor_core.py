@@ -508,6 +508,12 @@ function toast(msg){var t=document.getElementById('toast');t.textContent=msg;
   t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},1600)}
 
 function renderEntries(){
+  /* Pages that include this core do not all have an entry manager. Writing to
+     a missing element throws, and because the whole core plus the page script
+     share one <script> block, that throw kills everything after it -- which is
+     how /circa came to sit on "Loading..." forever while its own code was
+     never reached. */
+  if(!document.getElementById('entries'))return;
   var e=entries(),act=active(),h='',dead='';
   var wkNow=curWeekNo();
   function chipsFor(n,picks,removable){
@@ -541,7 +547,8 @@ function renderEntries(){
   document.getElementById('entries').innerHTML=h;
   document.getElementById('deadentries').innerHTML=dead;
   var alive=aliveIds().length, total=entryIds().length;
-  document.getElementById('alivecount').textContent=
+  var ac=document.getElementById('alivecount');
+  if(ac)ac.textContent=
     alive===total ? '' : alive+' of '+total+' alive';
 }
 
