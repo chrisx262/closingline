@@ -8,6 +8,7 @@ handled automatically (the season spans the November change).
 Cadence:
   Tue 09:00 ET  weekly_update.py (scores, grading, weekly rank snapshot)
   01:30 / 08:00 / 17:00 / 23:30 ET, EVERY DAY  scores + grading only
+  Sun 09:00 ET  Circa's published selections for the week
   Tue 12:00 ET  the week's opening capture
   Sat 12:00 ET  a midweek reference point
   ~80 min before EACH distinct kickoff time — the closing capture
@@ -47,6 +48,9 @@ SLOTS = [
     ("tue-grade",     1, 9,  0,  "weekly_update"),
     ("tue-open",      1, 12, 0,  "snapshot"),
     ("sat-midweek",   5, 12, 0,  "snapshot"),
+    # Circa publishes the week's selections after Saturday's 4pm PT lock, so
+    # Sunday morning is the first reliable moment to have it.
+    ("circa-picks",   6, 9,  0,  "circa"),
 ]
 
 # Minutes before kickoff for the closing capture. Inactives are published 90
@@ -165,6 +169,18 @@ def _run(job: str):
             # The snapshot is the part the whole platform depends on. An agent
             # failing to pick must never cost us the capture.
             print(f"scheduler: close picks failed ({type(e).__name__}: {e})")
+    elif job == "circa":
+        from sqlalchemy import func
+        from app import SessionLocal, Game
+        from loaders.circa_selections import run as circa_run
+        s = SessionLocal()
+        row = (s.query(func.max(Game.season), func.max(Game.week))
+                 .filter(Game.final == False).first())  # noqa: E712
+        cur = (s.query(Game).filter(Game.final == False)  # noqa: E712
+                 .order_by(Game.kickoff).first())
+        s.close()
+        if cur:
+            circa_run(cur.season, cur.week)
     elif job == "scores":
         # Results and grading only. No rank snapshot -- that is weekly by
         # design and taking it daily would break the movement arrows.

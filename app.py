@@ -26,6 +26,7 @@ from fastapi import FastAPI, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import (create_engine, Column, Integer, String, Float,
+                        UniqueConstraint,
                         DateTime, Boolean, ForeignKey, func)
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
@@ -146,6 +147,28 @@ class RankSnapshot(Base):
     agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
     rank = Column(Integer, nullable=False)
     captured_at = Column(DateTime, nullable=False)
+
+
+class CircaSelection(Base):
+    """How Circa's own field picked, one row per team per week.
+
+    Circa publishes every entry's pick after Saturday's lock, so unlike a public
+    pool this is the REAL field for the contest we care about. The survivor tool
+    was deliberately built without pick popularity on the grounds that Circa's
+    could not be seen; it can, and this is it.
+
+    `entries` is a count, not a percentage: the denominator moves every week as
+    entries are eliminated, and storing the derived number would lose that.
+    """
+    __tablename__ = "circa_selections"
+    id = Column(Integer, primary_key=True)
+    season = Column(Integer, nullable=False, index=True)
+    week = Column(Integer, nullable=False, index=True)
+    team = Column(String, nullable=False)        # our abbreviation, or NO_PICK
+    entries = Column(Integer, nullable=False)
+    captured_at = Column(DateTime, nullable=False)
+    __table_args__ = (UniqueConstraint("season", "week", "team",
+                                       name="uq_circa_week_team"),)
 
 
 class JobRun(Base):
@@ -1336,6 +1359,73 @@ def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
                      "submitted — this is the receipt, not a preview.")}
 
 
+@app.get("/data/circa/selections")
+def circa_selections(week: Optional[int] = None, season: Optional[int] = None,
+                     s: Session = Depends(db)):
+    """How Circa's own field picked that week, with each team's result.
+
+    Ordered most-picked first, with NO PICK last regardless of size: those
+    entries paid the thousand and were eliminated without playing, which is a
+    different kind of fact from a pick that lost.
+    """
+    season = season or current_season(s)
+    if week is None:
+        row = (s.query(CircaSelection).filter(CircaSelection.season == season)
+                 .order_by(CircaSelection.week.desc()).first())
+        if not row:
+            return {"season": season, "week": None, "rows": [],
+                    "note": "no Circa selections loaded yet"}
+        week = row.week
+
+    rows = (s.query(CircaSelection)
+              .filter(CircaSelection.season == season,
+                      CircaSelection.week == week).all())
+    if not rows:
+        return {"season": season, "week": week, "rows": []}
+
+    games = s.query(Game).filter(Game.season == season, Game.week == week).all()
+    # a team's result that week: won / lost / pending
+    outcome = {}
+    for g in games:
+        if not g.final or g.home_score is None:
+            outcome[g.home] = outcome[g.away] = "pending"
+            continue
+        if g.home_score == g.away_score:          # a tie eliminates in Circa
+            outcome[g.home] = outcome[g.away] = "tie"
+        else:
+            win = g.home if g.home_score > g.away_score else g.away
+            lose = g.away if win == g.home else g.home
+            outcome[win], outcome[lose] = "won", "lost"
+
+    total = sum(r.entries for r in rows)
+    out = []
+    for r in rows:
+        if r.team == "NO_PICK":
+            continue
+        res = outcome.get(r.team, "unknown")
+        out.append({"team": r.team, "entries": r.entries,
+                    "share": round(r.entries / total, 6) if total else None,
+                    "result": res,
+                    "alive": res in ("won", "pending")})
+    out.sort(key=lambda x: -x["entries"])
+
+    nopick = next((r for r in rows if r.team == "NO_PICK"), None)
+    if nopick:
+        out.append({"team": "NO_PICK", "entries": nopick.entries,
+                    "share": round(nopick.entries / total, 6) if total else None,
+                    "result": "no pick", "alive": False})
+
+    eliminated = sum(r["entries"] for r in out if not r["alive"])
+    return {"season": season, "week": week, "entries": total,
+            "eliminated": eliminated, "live": total - eliminated,
+            "captured_at": max(r.captured_at for r in rows).isoformat(),
+            "rows": out,
+            "source": ("Circa Sports publishes every entry's pick after the "
+                       "Saturday lock. Parsed from their Selections PDF, not "
+                       "from their summary graphic, which has omitted teams."),
+            "note": ("A tie eliminates in Circa, so a tie counts as out.")}
+
+
 @app.get("/data/trends")
 def trends(season: Optional[int] = None, s: Session = Depends(db)):
     """Season-wide situational splits from real graded games."""
@@ -1404,6 +1494,12 @@ def explorer():
 def moneyline_page():
     from moneyline_page import MONEYLINE_HTML
     return MONEYLINE_HTML
+
+
+@app.get("/circa", response_class=HTMLResponse)
+def circa_field():
+    from circa_page import CIRCA_HTML
+    return CIRCA_HTML
 
 
 @app.get("/survivor/sim", response_class=HTMLResponse)

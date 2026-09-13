@@ -4,6 +4,8 @@ Uses the synthetic season (has an upcoming week) + checks real-loader
 timezone handling. Exits nonzero on any failure.
 """
 
+import inspect          # used by checks throughout; imported here so adding a
+                       # test near the top of the file cannot NameError on it
 import sys
 from datetime import datetime, timedelta
 
@@ -201,6 +203,30 @@ check("no match beyond 36h",
       _match_game(_games, "KC", "BUF", datetime(2025, 11, 8, 18, 0)) is None)
 check("no match wrong teams",
       _match_game(_games, "PHI", "DAL", datetime(2025, 11, 2, 18, 0)) is None)
+
+# --- Circa's own field -------------------------------------------------
+# The survivor tool was built with no pick-popularity input because Circa's
+# field was thought unobtainable. Circa publishes it every week after the lock.
+from loaders.circa_selections import NICK as _NICK, pdf_url as _purl  # noqa: E402
+check("every NFL nickname maps to an abbreviation", len(set(_NICK.values())) == 32)
+# A nickname starting with a DIGIT is the trap that silently dropped ten 49ers
+# entries, and Circa's own summary graphic omitted two teams entirely.
+check("a nickname starting with a digit is handled", _NICK.get("49ERS") == "SF")
+check("both Buccaneers spellings map", _NICK.get("BUCS") == _NICK.get("BUCCANEERS"))
+check("the selections URL is built for the right season and week",
+      "Circa-Survivor-2026-Week-1-Selections.pdf" in _purl(2026, 1))
+_cs = c.get("/data/circa/selections")
+check("circa selections endpoint 200", _cs.status_code == 200)
+_csd = _cs.json()
+check("circa endpoint names its source, not a graphic",
+      "Selections PDF" in (_csd.get("source") or "")
+      or _csd.get("rows") == [])
+check("circa page 200 and carries the RG footer",
+      c.get("/circa").status_code == 200 and "1-800-GAMBLER" in c.get("/circa").text)
+check("a tie is treated as elimination on the circa page",
+      "tie" in inspect.getsource(__import__("app").circa_selections))
+check("no-pick entries are kept, not dropped",
+      "NO_PICK" in inspect.getsource(__import__("app").circa_selections))
 
 # --- scheduler slot logic (task 4 cron) ---------------------------------
 import scheduler  # noqa: E402
@@ -460,7 +486,6 @@ check("a real market price is never replaced by a prior",
 # carries September's opinion into December. Measured on 2025: fitting on the
 # unplayed priced games predicted later weeks ~25% better than fitting on
 # everything so far (3.04 vs 3.94 pts at week 10; 2.20 vs 3.09 at week 6).
-import inspect  # noqa: E402
 from app import season_priors  # noqa: E402
 _src = inspect.getsource(season_priors)
 check("the prior is fitted on games not yet played",

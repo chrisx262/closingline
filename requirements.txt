@@ -4,3 +4,4 @@ sqlalchemy
 requests
 httpx
 python-dotenv
+pypdf
