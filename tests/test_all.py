@@ -480,7 +480,16 @@ _future = (_s2.query(_Gm).filter(_Gm.kickoff > datetime.utcnow())
              .order_by(_Gm.kickoff).first())
 if _future is not None:
     _cur = current_snapshot(_s2, _future)
-    check("an upcoming game is never priced from a future-dated snapshot",
+    # The archive holds ONLY closing lines, so the loader's "available" copy is the
+# close stamped 120 hours early. On an unplayed game that is lookahead, and five
+# days out it becomes the newest price on hand and the board quotes the eventual
+# close as today's market -- Seattle read 79.6% while the market had moved them
+# to 66% on a quarterback injury.
+from loaders.nflverse_loader import load as _nvload  # noqa: E402
+check("the archive never seeds a game that has not been played",
+      "if not game.final:" in inspect.getsource(_nvload))
+
+check("an upcoming game is never priced from a future-dated snapshot",
           _cur is None or _cur.captured_at <= datetime.utcnow())
 _past = (_s2.query(_Gm).filter(_Gm.kickoff <= datetime.utcnow(),
                                 _Gm.final == True).first())  # noqa: E712

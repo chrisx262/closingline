@@ -88,6 +88,18 @@ def load(seasons: list[int], wipe: bool = False):
         # our convention:      spread_home_line negative = home favored
         # Only create the initial snapshot pair; once a game has snapshots,
         # the in-season odds cron owns updates (no duplicates on rerun).
+        # ONLY for games already played. This archive stores the CLOSING line
+        # and nothing else, so the "available" copy below is the close moved
+        # backwards in time. On a finished season that is a documented
+        # approximation for backtesting. On a game that has not kicked off it
+        # is lookahead, and worse, it outranks the real captures: the copy is
+        # stamped at kickoff minus 120 hours, so five days out it becomes the
+        # newest price on hand and the live board starts quoting the eventual
+        # close as today's market. That is how Seattle showed 79.6% while the
+        # market had them at 66% after their quarterback went out.
+        if not game.final:
+            loaded += 1
+            continue
         if not has_lines or s.query(OddsSnapshot).filter(
                 OddsSnapshot.game_id == gid).count():
             loaded += 1
