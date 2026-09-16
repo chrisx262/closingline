@@ -273,6 +273,26 @@ def closing_snapshot(s: Session, game: Game) -> Optional[OddsSnapshot]:
     return snapshot_at(s, game.id, game.kickoff)
 
 
+def current_snapshot(s: Session, game: Game) -> Optional[OddsSnapshot]:
+    """The price to SHOW for a game: its close if it has started, else the
+    newest one we actually hold.
+
+    closing_snapshot means "latest at or before kickoff", which is right for
+    grading and wrong for a game that has not kicked off. The nflverse archive
+    stamps its rows AT kickoff, so for any upcoming game that future-dated row
+    beat every real capture and the board served a seeded line while pretending
+    it was the market. On the first week 2 game that meant showing -155 when the
+    market had moved to -224: 57% against 69%, on a page whose entire job is to
+    say how likely a team is to win.
+
+    A closing line does not exist until the game has closed. Before that, the
+    honest answer is the most recent price on hand.
+    """
+    if game.kickoff <= datetime.utcnow():
+        return closing_snapshot(s, game)
+    return snapshot_at(s, game.id, datetime.utcnow())
+
+
 def price_from_snapshot(snap: OddsSnapshot, game: Game, market: str, side: str):
     """Return (line_from_side_perspective, odds) or raise."""
     if market == Market.spread:
@@ -1087,8 +1107,8 @@ def data_futures(season: int, market: Optional[str] = None,
 # ---------------------------------------------------------------- explorer
 
 def _game_ctx(s: Session, g: Game):
-    """Closing odds + situational tags + graded results for one game."""
-    snap = closing_snapshot(s, g)
+    """Current odds + situational tags + graded results for one game."""
+    snap = current_snapshot(s, g)
     ctx = {"game_id": g.id, "week": g.week, "kickoff": g.kickoff.isoformat(),
            "home": g.home, "away": g.away, "final": g.final,
            "home_score": g.home_score, "away_score": g.away_score,
@@ -1258,7 +1278,7 @@ def survivor_data(weeks: int = 8, season: Optional[int] = None,
                        .order_by(Game.kickoff).all())
             rows = []
             for g in games:
-                snap = closing_snapshot(s, g)
+                snap = current_snapshot(s, g)
                 home_wp, src = None, None
                 spread = snap.spread_home_line if snap else None
                 if snap and snap.captured_at is not None:

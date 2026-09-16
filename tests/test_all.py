@@ -469,6 +469,30 @@ check("wp_from_spread symmetric",
       abs(wp_from_spread(-7) + wp_from_spread(7) - 1.0) < 1e-9)
 
 sv = c.get("/data/survivor?weeks=4")
+# A game that has not kicked off has no closing line. The nflverse archive
+# stamps rows AT kickoff, so "latest before kickoff" picked that future-dated
+# seed over every real capture and the board showed a stale price as the market
+# -- -155 when the market had moved to -224, i.e. 57% shown as 69%.
+from app import current_snapshot, closing_snapshot  # noqa: E402
+from app import Game as _Gm  # noqa: E402
+_s2 = SessionLocal()
+_future = (_s2.query(_Gm).filter(_Gm.kickoff > datetime.utcnow())
+             .order_by(_Gm.kickoff).first())
+if _future is not None:
+    _cur = current_snapshot(_s2, _future)
+    check("an upcoming game is never priced from a future-dated snapshot",
+          _cur is None or _cur.captured_at <= datetime.utcnow())
+_past = (_s2.query(_Gm).filter(_Gm.kickoff <= datetime.utcnow(),
+                                _Gm.final == True).first())  # noqa: E712
+if _past is not None:
+    check("a finished game still uses its closing line",
+          (current_snapshot(_s2, _past) or 1) is (closing_snapshot(_s2, _past) or 1)
+          or current_snapshot(_s2, _past).captured_at
+          == closing_snapshot(_s2, _past).captured_at)
+_s2.close()
+check("the board asks for the current price, not the close",
+      "current_snapshot(s, g)" in inspect.getsource(__import__("app").survivor_data))
+
 check("survivor endpoint 200", sv.status_code == 200)
 svd = sv.json()
 check("survivor returns weeks", len(svd.get("weeks", [])) >= 1)
