@@ -242,6 +242,30 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-15: TWO PRICING BUGS, both served stale numbers as the live market.
+  (1) `closing_snapshot` = "latest at or before KICKOFF" is right for grading and
+  wrong for an unplayed game; the archive stamps rows AT kickoff so that future
+  row beat every real capture. Added `current_snapshot()` -- close if the game
+  has started, newest held price if not. (2) Same fault one step on: the archive
+  also writes an "available" copy at kickoff MINUS 120 HOURS, and once the clock
+  passes it, it becomes the newest price and the board quotes the eventual CLOSE
+  as today's market. Loader no longer seeds games that are not final; 196 such
+  snapshots purged from 2026 via scripts/purge_seeded.py (dry-run default,
+  refuses if any game would be left unpriced; 2,363 real captures underneath).
+  EFFECT: week 2 board was materially wrong. SEA showed 79.6% when the market
+  had them at 65.7% after a QB injury -- 2nd-best pick of the week vs 11th of
+  16. SF showed 80.8% vs a real 86.5%.
+- 2026-09-15: week 1 -> week 2 LINE MOVEMENT measured. Teams that WON week 1
+  moved -0.1 pts on average; teams that LOST moved +0.1. Essentially zero and
+  slightly backwards. KC won by 21 and got CHEAPER; IND lost by 18 and got
+  DEARER. One game tells the market almost nothing it did not already know --
+  do not re-plan a season around week 1.
+- 2026-09-15: POST-INTERNATIONAL-GAME letdown tested, inconclusive and the
+  sample says why. 2006-2025: only 50 teams went straight into the next week,
+  80 had a BYE. Those 50 won 54.0% vs 55.0% expected, +/-13.9 at 95% -- useless.
+  Note SF has NO bye after Melbourne, and Melbourne is ~10,000 miles/14h out of
+  phase against a history that is nearly all London (4,000 miles/5h). History
+  does not cover this trip.
 - 2026-09-10: RESULTS NOW LAND WITHIN HOURS, not on Tuesday. weekly_update
   split: refresh_and_grade() pulls nflverse scores and settles anything final,
   and runs 01:30/08:00/17:00/23:30 ET EVERY DAY (games fall on six of them).
