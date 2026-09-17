@@ -242,6 +242,30 @@ sponsor slots with click tracking · API keys hashed · UTC timezone fix ·
 ## Decisions log
 
 - (Claude Code: append decisions here, dated, one line each)
+- 2026-09-16: SNAPSHOTS NOW CARRY A `source` ('live' | 'archive') and a real
+  capture ALWAYS beats an archive row in snapshot_at, however the timestamps
+  fall. Third time this root cause bit, so it is a column rather than a guess.
+  The nflverse archive stores ONLY closing lines, so every row it writes is the
+  close wearing an earlier stamp -- letting one win meant pricing a bet at a
+  number no book offered, then grading it against a different feed. Migration:
+  scripts/migrate_snapshot_source.py (idempotent, dry-run default) reclassified
+  304 archive rows against 2,635 live captures on prod.
+- 2026-09-16: WEEK 1 CLV STAYS ON THE BOARD WITH A WARNING, not removed. It
+  cannot be repaired: closingline_open BOUGHT at seeded prices, which is in the
+  pick record, not the calculation. Recomputing would still be wrong for that
+  agent AND would set the precedent that a bad week can be revised -- exactly
+  what invariant 3 prevents. Records and ROI are untouched and genuine.
+  CORRECTED CLV after the fix: AlbanyRooks +7.39% (2-5, ROI -41.9%),
+  closingline_open +0.50% (11-5), closingline_close +0.0000 (12-3, ROI +23.5%).
+  The close agent reading EXACTLY ZERO is the proof the fix works -- it buys at
+  the close so it can capture no closing-line value. It is the control arm.
+  AlbanyRooks getting the best prices and the worst results in the same week is
+  the platform's thesis in one row.
+- 2026-09-16: /data/picks/results + a "Last week's picks" section on /moneyline.
+  A record of 11-5 is a claim; the picks behind it are the evidence. Both market
+  agents lost on LAC at -600/-490 (the game that took a third of the Circa
+  field). The two agents differ on exactly ONE game -- MIN at -133 late vs GB at
+  -112 on Tuesday -- and that single swing is the whole 12-3 vs 11-5.
 - 2026-09-15: TWO PRICING BUGS, both served stale numbers as the live market.
   (1) `closing_snapshot` = "latest at or before KICKOFF" is right for grading and
   wrong for an unplayed game; the archive stamps rows AT kickoff so that future
