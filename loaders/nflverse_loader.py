@@ -117,9 +117,10 @@ def load(seasons: list[int], wipe: bool = False):
             ml_away=int(float(row["away_moneyline"])) if row.get("away_moneyline") else None,
         )
         # "available" snapshot so agents picking days out find a price...
-        s.add(OddsSnapshot(captured_at=kickoff - timedelta(hours=120), **common))
+        s.add(OddsSnapshot(captured_at=kickoff - timedelta(hours=120),
+                           source="archive", **common))
         # ...and the official close at kickoff.
-        s.add(OddsSnapshot(captured_at=kickoff, **common))
+        s.add(OddsSnapshot(captured_at=kickoff, source="archive", **common))
         loaded += 1
 
     s.commit()

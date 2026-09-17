@@ -76,6 +76,10 @@ tbody tr:last-child td{border-bottom:none}
 .pos{color:var(--up)} .neg{color:var(--down)}
 .pill{display:inline-block;font-size:.66rem;font-weight:800;padding:.15rem .45rem;
   border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.caveat{border:1px solid var(--line);border-left:3px solid var(--down);
+  border-radius:6px;padding:.6rem .8rem;margin:.2rem 0 .8rem;
+  font-size:.7rem;line-height:1.6;color:var(--dim);max-width:78ch}
+.caveat b{color:var(--ink)}
 .reshead{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;margin-bottom:.4rem}
 .resgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:.6rem}
@@ -155,6 +159,14 @@ Every graded pick, so anyone can check the board against what actually happened.
 <div id="reswrap"></div>
 
 <h2 class="ohead">Leaderboard</h2>
+<div class="caveat" id="clvcaveat">
+  <b>Week 1 CLV is not trustworthy, and we are leaving it on the board rather than
+  quietly removing it.</b> Prices for week 1 were partly seeded from an archive that
+  stores only closing lines, so one agent bought at numbers no book was offering at the
+  time. That is baked into its pick record and cannot be recomputed. Win-loss records and
+  ROI are unaffected &mdash; those come from real scores and the prices actually paid.
+  From week 2 on, every pick is priced and graded against our own captures.
+</div>
 <div class="modes">
   <button data-mode="live" class="on">Live</button>
   <button data-mode="backtest">Backtest</button>

@@ -111,6 +111,14 @@ class OddsSnapshot(Base):
     under_odds = Column(Integer, default=-110)
     ml_home = Column(Integer)
     ml_away = Column(Integer)
+    # "live"    a real capture from the odds feed at that moment
+    # "archive" a row derived from nflverse, which stores only CLOSING lines.
+    # The distinction matters because an archive row is the close wearing an
+    # earlier timestamp, so it outranks every real capture and silently becomes
+    # both "today's price" and "the closing line" -- which is how a live board
+    # came to quote a stale number and how CLV came to measure two different
+    # data sources against each other rather than the market moving.
+    source = Column(String, default="live", nullable=False)
 
 
 class Pick(Base):
@@ -261,12 +269,21 @@ def wp_from_spread(spread_home_line: Optional[float]) -> Optional[float]:
 
 
 def snapshot_at(s: Session, game_id: str, at: datetime) -> Optional[OddsSnapshot]:
-    """Latest snapshot captured at or before `at` — the anti-lookahead core."""
-    return (s.query(OddsSnapshot)
-             .filter(OddsSnapshot.game_id == game_id,
-                     OddsSnapshot.captured_at <= at)
-             .order_by(OddsSnapshot.captured_at.desc())
-             .first())
+    """Latest snapshot captured at or before `at` — the anti-lookahead core.
+
+    A REAL capture always beats an archive row, however the timestamps fall.
+    The archive holds only closing lines, so its rows are the close wearing an
+    earlier stamp; letting one win because it sorts later means pricing a bet
+    at a number nobody was offering and then grading it against a different
+    feed entirely. Archive rows remain as a fallback for games we never
+    captured ourselves, which is what they are actually for.
+    """
+    q = (s.query(OddsSnapshot)
+           .filter(OddsSnapshot.game_id == game_id,
+                   OddsSnapshot.captured_at <= at))
+    live = (q.filter(OddsSnapshot.source == "live")
+             .order_by(OddsSnapshot.captured_at.desc()).first())
+    return live or q.order_by(OddsSnapshot.captured_at.desc()).first()
 
 
 def closing_snapshot(s: Session, game: Game) -> Optional[OddsSnapshot]:

@@ -248,6 +248,22 @@ _mlp = c.get("/moneyline").text
 check("the moneyline page shows last week's picks, not just totals",
       'id="reswrap"' in _mlp and "Last week" in _mlp)
 
+# The archive stores ONLY closing lines, so its rows are the close wearing an
+# earlier timestamp. Letting one outrank a real capture means pricing a bet at a
+# number nobody offered and then grading it against a different feed.
+from app import OddsSnapshot as _OSnap  # noqa: E402
+check("snapshots record whether they are a live capture or archive-derived",
+      hasattr(_OSnap, "source"))
+check("a real capture always beats an archive row",
+      'OddsSnapshot.source == "live"' in inspect.getsource(__import__("app").snapshot_at))
+check("archive rows are still kept as a fallback",
+      "live or q.order_by" in inspect.getsource(__import__("app").snapshot_at))
+check("the loader tags what it writes as archive",
+      'source="archive"' in open("loaders/nflverse_loader.py").read())
+# A bad week stays on the board with a warning rather than being tidied away.
+check("week 1's unreliable CLV is disclosed, not hidden",
+      "Week 1 CLV is not trustworthy" in _mlp)
+
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
 # field was thought unobtainable. Circa publishes it every week after the lock.
