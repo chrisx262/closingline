@@ -244,8 +244,9 @@ check("results are grouped by agent with a record",
       "agents" in _pr.json() and "weeks_available" in _pr.json())
 check("results exclude ungraded picks",
       'Pick.result != "pending"' in inspect.getsource(__import__("app").pick_results))
+_mlp = c.get("/moneyline").text
 check("the moneyline page shows last week's picks, not just totals",
-      'id="reswrap"' in _ml.text and "Last week" in _ml.text)
+      'id="reswrap"' in _mlp and "Last week" in _mlp)
 
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
