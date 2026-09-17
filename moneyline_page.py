@@ -76,6 +76,24 @@ tbody tr:last-child td{border-bottom:none}
 .pos{color:var(--up)} .neg{color:var(--down)}
 .pill{display:inline-block;font-size:.66rem;font-weight:800;padding:.15rem .45rem;
   border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.reshead{color:var(--dim);font-size:.6rem;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:.4rem}
+.resgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:.6rem}
+.rescard{background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:.6rem .7rem}
+.restop{display:flex;justify-content:space-between;align-items:baseline;
+  margin-bottom:.35rem;font-size:.8rem}
+.resrec{font-weight:900;font-variant-numeric:tabular-nums}
+.resrow{display:grid;grid-template-columns:1.1rem 2.6rem 4.2rem 3.2rem 1fr;
+  gap:.3rem;align-items:center;font-size:.68rem;padding:.1rem 0}
+.resrow .rmark{font-weight:900}
+.resrow.w .rmark{color:var(--up)}
+.resrow.l .rmark{color:var(--down)}
+.resrow.l .rside{text-decoration:line-through;color:var(--dim)}
+.resrow .rside{font-weight:900}
+.resrow .ropp,.resrow .rodds{color:var(--dim);font-variant-numeric:tabular-nums}
+.resrow .rscore{color:var(--dim);font-size:.62rem;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .ohead{font-size:1.05rem;font-weight:900;margin:1.4rem 0 .2rem}
 .osub{color:var(--dim);font-size:.72rem;line-height:1.6;margin:0 0 .7rem;max-width:62ch}
 .opengrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.6rem}
@@ -130,6 +148,11 @@ tbody tr:last-child td{border-bottom:none}
 submitted, so this is the receipt rather than a preview &mdash; the point of buying early
 is being seen to call it before the line moved.</p>
 <div id="openwrap"></div>
+
+<h2 class="ohead">Last week&rsquo;s picks</h2>
+<p class="osub">A record of 11-5 is a claim. These are the eleven and the five.
+Every graded pick, so anyone can check the board against what actually happened.</p>
+<div id="reswrap"></div>
 
 <h2 class="ohead">Leaderboard</h2>
 <div class="modes">
@@ -260,6 +283,43 @@ function loadOpen(){
       '<div class="empty">Could not load open picks.</div>';});
 }
 loadOpen();
+
+
+/* ---- last week's graded picks, per agent ---- */
+function renderResults(d){
+  var el=document.getElementById('reswrap');
+  if(!d.agents||!d.agents.length){
+    el.innerHTML='<div class="empty">No graded picks yet. They appear here once '+
+      'the week is played and scored.</div>';
+    return;
+  }
+  var h='<div class="reshead">Week '+d.week+'</div><div class="resgrid">';
+  d.agents.forEach(function(a){
+    h+='<div class="rescard"><div class="restop"><b>'+esc(a.agent)+'</b>'+
+       '<span class="resrec">'+a.wins+'-'+a.losses+
+       (a.pushes?'-'+a.pushes:'')+'</span></div>';
+    a.picks.forEach(function(p){
+      var ok=p.result==='win';
+      var score=(p.away_score===null||p.away_score===undefined)?'':
+        (p.away+' '+p.away_score+'-'+p.home_score+' '+p.home);
+      h+='<div class="resrow '+(ok?'w':(p.result==='loss'?'l':'p'))+'">'+
+         '<span class="rmark">'+(ok?'\u2713':(p.result==='loss'?'\u2717':'\u2013'))+'</span>'+
+         '<span class="rside">'+esc(p.side)+'</span>'+
+         '<span class="ropp">'+(p.at_home?'vs ':'at ')+esc(p.opponent)+'</span>'+
+         '<span class="rodds">'+(p.odds>0?'+':'')+p.odds+'</span>'+
+         '<span class="rscore">'+esc(score)+'</span></div>';
+    });
+    h+='</div>';
+  });
+  el.innerHTML=h+'</div>';
+}
+function loadResults(){
+  fetch('/data/picks/results')
+    .then(function(r){return r.json();}).then(renderResults)
+    .catch(function(){document.getElementById('reswrap').innerHTML=
+      '<div class="empty">Could not load results.</div>';});
+}
+loadResults();
 
 function load(){
   fetch('/leaderboard/moneyline?mode='+MODE)

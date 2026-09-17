@@ -236,6 +236,17 @@ if shutil.which("node"):
 else:
     print("SKIP  page JavaScript smoke test (node not installed)")
 
+# A record of 11-5 is a claim; the picks behind it are the evidence. The board
+# showed totals and nothing else, so nobody could check it.
+_pr = c.get("/data/picks/results")
+check("pick results endpoint 200", _pr.status_code == 200)
+check("results are grouped by agent with a record",
+      "agents" in _pr.json() and "weeks_available" in _pr.json())
+check("results exclude ungraded picks",
+      'Pick.result != "pending"' in inspect.getsource(__import__("app").pick_results))
+check("the moneyline page shows last week's picks, not just totals",
+      'id="reswrap"' in _ml.text and "Last week" in _ml.text)
+
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
 # field was thought unobtainable. Circa publishes it every week after the lock.

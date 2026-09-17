@@ -1379,6 +1379,57 @@ def pending_picks(season: Optional[int] = None, s: Session = Depends(db)):
                      "submitted — this is the receipt, not a preview.")}
 
 
+@app.get("/data/picks/results")
+def pick_results(week: Optional[int] = None, season: Optional[int] = None,
+                 s: Session = Depends(db)):
+    """Graded picks, by agent, for one week.
+
+    The leaderboard says an agent went 11-5. This says which eleven and which
+    five, which is the part anyone checking the record actually wants -- a
+    total is a claim, the picks behind it are the evidence.
+    """
+    season = season or current_season(s)
+    if week is None:
+        row = (s.query(Game).filter(Game.season == season, Game.final == True)  # noqa: E712
+                 .order_by(Game.week.desc()).first())
+        week = row.week if row else 1
+
+    rows = (s.query(Pick, Game, Agent)
+              .join(Game, Game.id == Pick.game_id)
+              .join(Agent, Agent.id == Pick.agent_id)
+              .filter(Pick.mode == "live", Game.season == season,
+                      Game.week == week,
+                      Pick.result.isnot(None), Pick.result != "pending")
+              .order_by(Agent.name, Game.kickoff).all())
+
+    by_agent: dict = {}
+    for p, g, a in rows:
+        e = by_agent.setdefault(a.name, {"agent": a.name, "kind": a.kind,
+                                         "wins": 0, "losses": 0, "pushes": 0,
+                                         "picks": []})
+        if p.result == "win":
+            e["wins"] += 1
+        elif p.result == "loss":
+            e["losses"] += 1
+        else:
+            e["pushes"] += 1
+        e["picks"].append({
+            "game_id": g.id, "side": p.side, "market": p.market,
+            "odds": p.snap_odds, "result": p.result,
+            "away": g.away, "home": g.home,
+            "away_score": g.away_score, "home_score": g.home_score,
+            "at_home": p.side == g.home,
+            "opponent": g.away if p.side == g.home else g.home,
+            "kickoff": g.kickoff.isoformat(),
+        })
+    agents = sorted(by_agent.values(), key=lambda x: (-x["wins"], x["losses"]))
+    weeks = [r[0] for r in
+             s.query(Game.week).filter(Game.season == season,
+                                       Game.final == True).distinct().all()]  # noqa: E712
+    return {"season": season, "week": week,
+            "weeks_available": sorted(weeks), "agents": agents}
+
+
 @app.get("/data/circa/selections")
 def circa_selections(week: Optional[int] = None, season: Optional[int] = None,
                      s: Session = Depends(db)):
