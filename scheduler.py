@@ -10,6 +10,7 @@ Cadence:
   01:30 / 08:00 / 17:00 / 23:30 ET, EVERY DAY  scores + grading only
   Sun 09:00 ET  Circa's published selections for the week
   Tue 12:00 ET  the week's opening capture
+  Tue 12:05 ET  the open agent buys that week at the price just captured
   Sat 12:00 ET  a midweek reference point
   ~80 min before EACH distinct kickoff time — the closing capture
 
@@ -47,6 +48,12 @@ SLOTS = [
     ("scores-late",  None, 23, 30, "scores"),
     ("tue-grade",     1, 9,  0,  "weekly_update"),
     ("tue-open",      1, 12, 0,  "snapshot"),
+    # Five minutes after the opening capture, so the open agent buys the price
+    # that capture just took. Doing this by hand did not work -- week 2 was
+    # missed entirely, and submitting late is worse than not submitting, since
+    # by Friday the price is near the close and the open-versus-close
+    # comparison stops measuring anything.
+    ("tue-open-picks", 1, 12, 5,  "open_picks"),
     ("sat-midweek",   5, 12, 0,  "snapshot"),
     # Circa publishes the week's selections after Saturday's 4pm PT lock, so
     # Sunday morning is the first reliable moment to have it.
@@ -169,6 +176,12 @@ def _run(job: str):
             # The snapshot is the part the whole platform depends on. An agent
             # failing to pick must never cost us the capture.
             print(f"scheduler: close picks failed ({type(e).__name__}: {e})")
+    elif job == "open_picks":
+        try:
+            from systems.market_agent import submit_open_week
+            submit_open_week()
+        except Exception as e:
+            print(f"scheduler: open picks failed ({type(e).__name__}: {e})")
     elif job == "circa":
         from sqlalchemy import func
         from app import SessionLocal, Game

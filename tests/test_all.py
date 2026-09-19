@@ -13,6 +13,9 @@ import re
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, ".")
+import scheduler  # noqa: E402  — imported here for the same reason as above
 from datetime import datetime, timedelta
 
 sys.path.insert(0, ".")
@@ -264,6 +267,23 @@ check("the loader tags what it writes as archive",
 check("week 1's unreliable CLV is disclosed, not hidden",
       "Week 1 CLV is not trustworthy" in _mlp)
 
+# The open agent was a manual script and week 2 was missed entirely. Submitting
+# late is worse than missing: by Friday the price is near the close and the
+# open-versus-close comparison stops measuring anything, so week 2 stays skipped
+# rather than backfilled.
+check("the open agent submits on a schedule, not by hand",
+      any(j == "open_picks" for _n, _w, _h, _m, j in scheduler.SLOTS))
+check("it buys just after the opening capture, not before it",
+      [(h, m) for n, w, h, m, j in scheduler.SLOTS if j == "open_picks"]
+      > [(h, m) for n, w, h, m, j in scheduler.SLOTS if n == "tue-open"])
+from systems.market_agent import submit_open_week as _sow  # noqa: E402
+check("it never picks a game that has kicked off",
+      "Game.kickoff > now" in inspect.getsource(_sow))
+check("it never re-picks a game it already holds",
+      "if g.id in held:" in inspect.getsource(_sow))
+check("a failing open agent cannot take the scheduler down",
+      "open picks failed" in open("scheduler.py").read())
+
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
 # field was thought unobtainable. Circa publishes it every week after the lock.
@@ -289,7 +309,6 @@ check("no-pick entries are kept, not dropped",
       "NO_PICK" in inspect.getsource(__import__("app").circa_selections))
 
 # --- scheduler slot logic (task 4 cron) ---------------------------------
-import scheduler  # noqa: E402
 _tue = datetime(2025, 11, 4, 12, 3)        # a Tuesday, inside grace window
 check("tue 12:03 fires tue-open snapshot",
       [j for _, j in scheduler.due_slots(_tue, set())] == ["snapshot"])

@@ -202,6 +202,92 @@ def submit_close_wave(minutes_ahead, window_min, dry=False, now=None):
     return (ok, fail, skipped)
 
 
+def submit_open_week(dry=False, now=None):
+    """Back the market favourite in every game of the current week, at the
+    week's opening price.
+
+    Runs from the scheduler just after the Tuesday capture, because doing it by
+    hand does not work: week 2 was missed entirely that way, and submitting
+    late is worse than not submitting at all -- by Friday the price is near the
+    close and the whole open-versus-close comparison quietly stops measuring
+    anything. Week 2 is therefore SKIPPED for this agent rather than backfilled.
+
+    Never picks a game that has already kicked off, and never a game it already
+    holds: picks are immutable, so a re-run would be a second live position
+    rather than a no-op.
+    """
+    from datetime import datetime
+    from app import (SessionLocal, Game, Pick, Agent, snapshot_at,
+                     devig_two_way, wp_from_spread)
+
+    key = os.environ.get("OPEN_AGENT_KEY")
+    if not key and not dry:
+        print("open agent: OPEN_AGENT_KEY not set — skipping")
+        return (0, 0, 0)
+
+    now = now or datetime.utcnow()
+    s = SessionLocal()
+    try:
+        nxt = (s.query(Game).filter(Game.final == False,  # noqa: E712
+                                    Game.kickoff > now)
+                 .order_by(Game.kickoff).first())
+        if not nxt:
+            print("open agent: no upcoming games")
+            return (0, 0, 0)
+        season, week = nxt.season, nxt.week
+        games = (s.query(Game)
+                   .filter(Game.season == season, Game.week == week,
+                           Game.kickoff > now)
+                   .order_by(Game.kickoff).all())
+        agent = s.query(Agent).filter(Agent.name == OPEN_NAME).first()
+        held = set()
+        if agent:
+            held = {p.game_id for p in s.query(Pick)
+                    .filter(Pick.agent_id == agent.id).all()}
+        plan = []
+        for g in games:
+            if g.id in held:
+                continue
+            snap = snapshot_at(s, g.id, now)
+            if not snap:
+                continue
+            if snap.ml_home is not None and snap.ml_away is not None:
+                hw = devig_two_way(snap.ml_home, snap.ml_away)
+            elif snap.spread_home_line is not None:
+                hw = wp_from_spread(snap.spread_home_line)
+            else:
+                continue
+            if hw is None:
+                continue
+            side, wp = (g.home, hw) if hw >= 0.5 else (g.away, 1 - hw)
+            plan.append((g.id, side, round(wp, 4)))
+        skipped = len(games) - len(plan)
+    finally:
+        s.close()
+
+    print(f"open agent: week {week}, {len(plan)} to submit, {skipped} skipped")
+    if dry:
+        for gid, side, wp in plan:
+            print(f"  would pick {side} ({wp*100:.1f}%) {gid}")
+        return (0, 0, skipped)
+
+    ok = fail = 0
+    for gid, side, wp in plan:
+        r = requests.post(f"{BASE}/picks", headers={"x-api-key": key},
+                          json={"game_id": gid, "market": "moneyline",
+                                "side": side, "stake_units": 1.0,
+                                "confidence": wp,
+                                "model_version": MODEL_VERSION,
+                                "mode": "live"}, timeout=30)
+        if r.status_code == 200:
+            ok += 1
+        else:
+            fail += 1
+            print(f"open agent: {side} {gid} failed {r.status_code} {r.text[:100]}")
+    print(f"open agent: submitted {ok}, failed {fail}")
+    return (ok, fail, skipped)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--week", type=int, required=True)
