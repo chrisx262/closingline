@@ -112,14 +112,23 @@ h2 em{font-style:normal;color:var(--up)}
   gap:.35rem;margin-top:.7rem;align-items:start}
 .entry.dead.open{grid-column:1/-1}
 @media (hover:none){.outbtn{opacity:1}}   /* no hover on a phone */
-.entry.dead{padding:.45rem .8rem;opacity:.72;box-shadow:none;background:transparent;
-  border-color:color-mix(in srgb,var(--down) 55%,transparent)}
-.entry.dead:hover{transform:none;opacity:1;border-color:var(--down)}
+/* An eliminated entry is boxed in red rather than faded out. Fading it was the
+   wrong instinct: a dead entry is not clutter to be tucked away, it is the
+   single most important thing on the page for whoever is reading it. */
+.entry.dead{padding:.45rem .8rem;box-shadow:none;
+  border:2px solid var(--down);
+  background:color-mix(in srgb,var(--down) 9%,transparent)}
+.entry.dead:hover{transform:none;
+  background:color-mix(in srgb,var(--down) 14%,transparent)}
 .entry.dead .etop{gap:.6rem;justify-content:flex-start}
 .entry.dead .etitle{text-decoration:line-through;font-size:.76rem}
-.entry.dead .ecount{color:var(--down);letter-spacing:.06em;margin-right:auto}
+.entry.dead .ecount{color:#fff;background:var(--down);letter-spacing:.08em;
+  margin-right:auto;padding:.1rem .4rem;border-radius:4px;font-weight:900}
 .entry.dead .caret{color:var(--dim);font-size:.7rem}
 .entry.dead .usedchips{margin-top:.5rem;min-height:0;filter:grayscale(.55)}
+.entry.dead .etitle{color:var(--down)}
+.entry.dead .edeadnote{color:var(--dim);font-size:.62rem;font-weight:700;
+  margin-right:auto}
 
 /* week nav */
 .weeknav{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.2rem 0 1rem}
@@ -530,7 +539,8 @@ function renderEntries(){
       var wk=outWeek(n);
       dead+='<div class="entry dead'+(EXPANDED[n]?' open':'')+'" onclick="toggleDead('+n+')">'+
         '<div class="etop"><span class="etitle">Entry '+n+'</span>'+
-        '<span class="ecount">out'+(wk?' · wk '+wk:'')+' · '+used.length+' used</span>'+
+        '<span class="ecount">OUT'+(wk?' · WK '+wk:'')+'</span>'+
+        '<span class="edeadnote">'+used.length+' used</span>'+
         '<button class="linkbtn" onclick="event.stopPropagation();reviveEntry('+n+')">back in</button>'+
         '<span class="caret">'+(EXPANDED[n]?'▴':'▾')+'</span></div>'+
         (EXPANDED[n]?'<div class="usedchips">'+chipsFor(n,used,false)+'</div>':'')+

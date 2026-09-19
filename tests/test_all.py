@@ -284,6 +284,18 @@ check("it never re-picks a game it already holds",
 check("a failing open agent cannot take the scheduler down",
       "open picks failed" in open("scheduler.py").read())
 
+# An eliminated entry was faded out at 72% opacity with a washed-out border.
+# Wrong instinct: a dead entry is not clutter, it is the most important thing on
+# the page for whoever is reading it.
+_sv = c.get("/survivor").text
+_deadrule = re.search(r"\.entry\.dead\{[^}]*\}", _sv)
+check("an eliminated entry is boxed in red, not faded",
+      _deadrule is not None
+      and "border:2px solid var(--down)" in _deadrule.group(0)
+      and "opacity" not in _deadrule.group(0))
+check("the OUT badge is filled, not just coloured text",
+      "background:var(--down)" in _sv)
+
 # --- Circa's own field -------------------------------------------------
 # The survivor tool was built with no pick-popularity input because Circa's
 # field was thought unobtainable. Circa publishes it every week after the lock.
