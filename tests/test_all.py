@@ -307,6 +307,19 @@ check("a nickname starting with a digit is handled", _NICK.get("49ERS") == "SF")
 check("both Buccaneers spellings map", _NICK.get("BUCS") == _NICK.get("BUCCANEERS"))
 check("the selections URL is built for the right season and week",
       "Circa-Survivor-2026-Week-1-Selections.pdf" in _purl(2026, 1))
+# Entries that never picked are ABSENT from the Selections PDF, not listed in
+# it, so parsing for "NO PICK" finds nothing. The number is recoverable by
+# subtraction: survivors of last week, minus this week's selections.
+from loaders.circa_selections import derive_no_pick as _dnp  # noqa: E402
+check("week 1 cannot derive a no-pick count and says so",
+      _dnp(2026, 1, 0) is None)
+check("later weeks derive it from the previous week's survivors",
+      "survivors - selected" in inspect.getsource(_dnp))
+check("a tie counts as elimination when computing survivors",
+      "a tie eliminates in Circa" in inspect.getsource(_dnp))
+check("an unsettled previous week yields nothing rather than a wrong number",
+      "not all(g.final for g in games)" in inspect.getsource(_dnp))
+
 _cs = c.get("/data/circa/selections")
 check("circa selections endpoint 200", _cs.status_code == 200)
 _csd = _cs.json()

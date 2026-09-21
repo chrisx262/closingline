@@ -112,6 +112,46 @@ def parse(data: bytes):
     return counts, n, markers
 
 
+def derive_no_pick(season: int, week: int, selected: int):
+    """Entries that paid and never picked, worked out by subtraction.
+
+    The Selections PDF does not list them -- an entry with no pick is simply
+    absent from it, which is why parsing for "NO PICK" finds nothing. But the
+    number is recoverable: everyone who survived last week either appears in
+    this week's document or did not pick. So
+
+        no pick = survivors of week N-1  -  selections in week N
+
+    Week 1 has no previous week to subtract from, so it needs the figure from
+    Circa's summary graphic and is passed in by hand. Every week after that is
+    self-sufficient.
+    """
+    if week <= 1:
+        return None
+    from app import SessionLocal, CircaSelection, Game
+    s = SessionLocal()
+    try:
+        prev = (s.query(CircaSelection)
+                  .filter(CircaSelection.season == season,
+                          CircaSelection.week == week - 1).all())
+        if not prev:
+            return None
+        games = s.query(Game).filter(Game.season == season,
+                                     Game.week == week - 1).all()
+        if not all(g.final for g in games):
+            return None                    # last week is not settled yet
+        won = set()
+        for g in games:
+            if g.home_score is None or g.home_score == g.away_score:
+                continue                   # a tie eliminates in Circa
+            won.add(g.home if g.home_score > g.away_score else g.away)
+        survivors = sum(r.entries for r in prev if r.team in won)
+    finally:
+        s.close()
+    n = survivors - selected
+    return n if n >= 0 else None
+
+
 def store(season: int, week: int, counts: dict):
     from app import SessionLocal, CircaSelection, Base, engine
     Base.metadata.create_all(engine)
@@ -134,8 +174,13 @@ def store(season: int, week: int, counts: dict):
 
 def run(season: int, week: int, month: int = None, no_pick: int = None):
     counts, n, markers = parse(fetch(season, week, month))
+    if no_pick is None:
+        no_pick = derive_no_pick(season, week, n)
     if no_pick is not None:
         counts["NO_PICK"] = no_pick
+        print(f"  no pick: {no_pick}")
+    elif week > 1:
+        print("  no-pick count unavailable — last week is not settled yet")
     total = sum(counts.values())
     print(f"week {week}: {n:,} selections parsed of {markers:,} markers, "
           f"{len(counts)} teams, {total:,} entries")
