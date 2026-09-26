@@ -168,11 +168,12 @@ function renderBoard(){
     'kickoff). Tap <b>Preview with 2025 data</b> above to see it in action.</div>';
     document.getElementById('wtitle').textContent='Week —';
     document.getElementById('wsrc').textContent='';return;}
-  var w=WEEKS[curIdx], teams=weekTeams(w), fut=futureMap(), pops=popEstimates(teams), act=active();
+  var w=viewWeek(), teams=weekTeams(w), fut=futureMap(), pops=popEstimates(teams), act=active();
   var wkNo=w.week;
   var FV=futureValue(w.week), STARS=fvStars(FV), FVW=fvWeeksAhead(w.week);
   document.getElementById('wtitle').textContent='Week '+w.week;
   var src=(w.games.find(function(g){return g.wp_source;})||{}).wp_source;
+  if(curIdx<0){document.getElementById('wtitle').textContent='Week '+w.week+' (played)';}
   document.getElementById('wsrc').textContent=src?('win prob from '+(src==='ml'?'market moneyline':'market spread')):'';
   var h='<div class="picks">';
   teams.forEach(function(p,i){
@@ -222,7 +223,9 @@ function renderBoard(){
 function renderPortfolio(){
   var el=document.getElementById('portfolio');
   if(!WEEKS.length){el.innerHTML='<div class="empty">Portfolio suggestion appears once lines post.</div>';return;}
-  var w=WEEKS[curIdx], teams=weekTeams(w);
+  var w=viewWeek(), teams=weekTeams(w);
+  if(curIdx<0){el.innerHTML='<div class="empty">Week '+w.week+' is already played — '+
+    'nothing to split. Use this week only to record a pick you missed.</div>';return;}
   if(!teams.length){el.innerHTML='<div class="empty">No games to allocate this week.</div>';return;}
   if(!aliveIds().length){el.innerHTML='<div class="empty">Every entry is marked out — nothing left to split.</div>';return;}
   /* entries that already made this week's pick are settled -- the split is for

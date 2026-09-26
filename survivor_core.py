@@ -476,7 +476,12 @@ function outMap(){var o;try{o=JSON.parse(localStorage.getItem(OUTK))||{}}catch(e
 function isOut(n){return outMap()[n]!=null;}
 function outWeek(n){var w=outMap()[n];return (typeof w==='number'&&w>0)?w:null;}
 function aliveIds(){return entryIds().filter(function(n){return !isOut(n);});}
-function curWeekNo(){return (WEEKS.length&&WEEKS[curIdx])?WEEKS[curIdx].week:0;}
+/* The week on screen. curIdx 0 is the current week; negative steps back into
+   PAST, which only the main survivor page loads. Everything else that reads
+   WEEKS -- the simulator, future value, the holiday planner -- still sees
+   upcoming weeks only, because a played week is not something to plan into. */
+function viewWeek(){return curIdx<0?PAST[PAST.length+curIdx]:WEEKS[curIdx];}
+function curWeekNo(){var w=(WEEKS.length||PAST.length)?viewWeek():null;return w?w.week:0;}
 function markOut(n){
   n=String(n);
   var o=outMap();o[n]=curWeekNo();localStorage.setItem(OUTK,JSON.stringify(o));
@@ -581,7 +586,7 @@ function setLean(v){LEAN=parseFloat(v);localStorage.setItem(LK,String(LEAN));
 })();
 
 /* ---------- data ---------- */
-var DATA=null, WEEKS=[], curIdx=0, PREVIEW=false;
+var DATA=null, WEEKS=[], PAST=[], curIdx=0, PREVIEW=false;
 var HOLWP={};                                  // "AWAY@HOME" -> {aw, hw} for holiday games
 function indexHol(weeksArr){
   (weeksArr||[]).forEach(function(w){(w.games||[]).forEach(function(g){
@@ -622,9 +627,15 @@ async function load(){
   try{DATA=await (await fetch(url)).json();}catch(e){DATA={weeks:[]};}
   WEEKS=(DATA.weeks||[]).filter(function(w){return w.games&&w.games.length;});
   indexHol(DATA.weeks);
-  curIdx=0;
+  curIdx=0;PAST=[];
   renderAll();
   renderAsOf();
+  /* Played weeks, so Prev works from the current week and a pick that was
+     never recorded can still be entered against the week it was made in. */
+  if(!PREVIEW&&document.getElementById('board')&&DATA.start_week>1){
+    try{var p=await (await fetch('/data/survivor?start_week=1&weeks='+(DATA.start_week-1))).json();
+      PAST=(p.weeks||[]).filter(function(w){return w.games&&w.games.length;});}catch(e){PAST=[];}
+  }
   // holiday legs are weeks 12 & 16 — usually outside the 8-week board window, so
   // pull those weeks' win probs on their own (fills in once the market posts them).
   if(!PREVIEW){[12,16].forEach(function(wk){
@@ -717,7 +728,7 @@ function popEstimates(teams){
   return raw.map(function(r,i){return Math.min(45,Math.round(r/sum*100*1.15));});
 }
 
-function stepWeek(d){if(!WEEKS.length)return;curIdx=Math.max(0,Math.min(WEEKS.length-1,curIdx+d));
+function stepWeek(d){if(!WEEKS.length)return;curIdx=Math.max(-PAST.length,Math.min(WEEKS.length-1,curIdx+d));
   renderAll();}
 function togglePreview(){PREVIEW=!PREVIEW;
   document.getElementById('previewBtn').textContent=PREVIEW?'Use live schedule':'Preview with 2025 data';
