@@ -362,6 +362,33 @@ check("the weekly job still takes it",
 check("grading only ever touches games already final",
       "Game.final == True" in _insp.getsource(_wu.refresh_and_grade))
 
+# Circa posts its selections PDF ~21:17 ET Saturday; Sunday 09:00 is backup.
+check("circa field is pulled saturday 22:00 ET",
+      [j for _, j in scheduler.due_slots(datetime(2026, 10, 10, 22, 5),
+                                         set())] == ["circa"])
+check("sunday 09:00 is only the circa backup",
+      [j for _, j in scheduler.due_slots(datetime(2026, 10, 11, 9, 0),
+                                         set())] == ["circa_backup"])
+check("a missing circa PDF cannot kill the scheduler thread",
+      "except SystemExit" in _insp.getsource(scheduler._run))
+# Results land within ~15 min of the final whistle, not at the next fixed slot.
+# Sunday 2026-10-18 16:25 ET kickoff = 20:25 UTC.
+_late = datetime(2026, 10, 18, 20, 25)
+check("a late game is checked for its result at 19:15 ET",
+      scheduler.due_live_score_slots(datetime(2026, 10, 18, 19, 15), set(),
+                                     [_late]) == [("live-scores-1915:2026-10-18", "scores")])
+check("no results check while a game is still early",
+      scheduler.due_live_score_slots(datetime(2026, 10, 18, 18, 0), set(), [_late]) == [])
+check("results check fires once per 15 minutes",
+      scheduler.due_live_score_slots(datetime(2026, 10, 18, 19, 22),
+                                     {"live-scores-1915:2026-10-18"}, [_late]) == [])
+check("results polling gives up 7h after kickoff",
+      scheduler.due_live_score_slots(datetime(2026, 10, 18, 23, 40), set(), [_late]) == [])
+check("three waves finishing together cost one check",
+      len(scheduler.due_live_score_slots(datetime(2026, 10, 18, 19, 30), set(),
+          [_late, _late - timedelta(minutes=20), datetime(2026, 10, 18, 17, 0)])) == 1)
+check("the loop actually asks for live results",
+      "due_live_score_slots" in _insp.getsource(scheduler._loop))
 check("wednesday fires no FIXED slot",
       scheduler.due_slots(datetime(2025, 11, 5, 12, 0), set()) == [])
 

@@ -8,7 +8,8 @@ handled automatically (the season spans the November change).
 Cadence:
   Tue 09:00 ET  weekly_update.py (scores, grading, weekly rank snapshot)
   01:30 / 08:00 / 17:00 / 23:30 ET, EVERY DAY  scores + grading only
-  Sun 09:00 ET  Circa's published selections for the week
+  every 15 min while a game is finishing  scores + grading (see below)
+  Sat 22:00 ET  Circa's published selections for the week (Sun 09:00 backup)
   Tue 12:00 ET  the week's opening capture
   Tue 12:05 ET  the open agent buys that week at the price just captured
   Sat 12:00 ET  a midweek reference point
@@ -55,9 +56,13 @@ SLOTS = [
     # comparison stops measuring anything.
     ("tue-open-picks", 1, 12, 5,  "open_picks"),
     ("sat-midweek",   5, 12, 0,  "snapshot"),
-    # Circa publishes the week's selections after Saturday's 4pm PT lock, so
-    # Sunday morning is the first reliable moment to have it.
-    ("circa-picks",   6, 9,  0,  "circa"),
+    # Circa uploads the week's selections PDF on Saturday night, about 4h15m
+    # after the 4pm PT lock: 21:21, 21:18, 21:17, 21:17 ET for weeks 2-5
+    # (the files' Last-Modified headers). This used to wait for Sunday 09:00
+    # on a guess, leaving the field unseen for ~12 hours every week. Sunday
+    # stays as a backup that only fetches if Saturday came up empty.
+    ("circa-picks",   5, 22, 0,  "circa"),
+    ("circa-backup",  6, 9,  0,  "circa_backup"),
 ]
 
 # Minutes before kickoff for the closing capture. Inactives are published 90
@@ -65,6 +70,17 @@ SLOTS = [
 # line is pulled.
 PRE_KICK_MIN = 80
 GRACE_MIN = 15  # a slot fires once anywhere in [t, t+15min) — survives restarts
+
+# Results after the final whistle. The fixed score slots alone left the Sunday
+# 16:25 games unscored until 23:30 -- the 17:00 check runs before they end --
+# so the Circa field and survivor board showed a decided game as "pending"
+# for four hours. nflverse updates games.csv about every ten minutes on game
+# days, so we poll it every LIVE_EVERY_MIN from LIVE_FROM_MIN after a kickoff
+# until that game is final, giving up after LIVE_UNTIL_MIN (a feed outage must
+# not poll forever; the fixed slots still catch it). Free: no odds credits.
+LIVE_FROM_MIN = 165     # 2h45m: the fastest a game realistically ends
+LIVE_UNTIL_MIN = 420    # 7h: long past any overtime or weather delay
+LIVE_EVERY_MIN = 15
 
 
 def due_slots(now_et: datetime, fired: set) -> list:
@@ -106,6 +122,37 @@ def due_kickoff_slots(now_et: datetime, fired: set, kickoffs) -> list:
         if key not in fired:
             out.append((key, "close_wave"))
     return out
+
+
+def due_live_score_slots(now_et: datetime, fired: set, kickoffs) -> list:
+    """Should a results check run right now? (pure, unit-tested)
+
+    `kickoffs` is the naive-UTC kickoff times of games NOT yet final. Fires at
+    most once per LIVE_EVERY_MIN block while any of them is in its finishing
+    window, so a Sunday with three waves costs one check per block, not three.
+    """
+    now_utc = now_et.replace(tzinfo=ET).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    finishing = any(timedelta(minutes=LIVE_FROM_MIN) <= now_utc - k
+                    <= timedelta(minutes=LIVE_UNTIL_MIN) for k in kickoffs)
+    if not finishing:
+        return []
+    block = now_et.minute // LIVE_EVERY_MIN * LIVE_EVERY_MIN
+    key = f"live-scores-{now_et.hour:02d}{block:02d}:{now_et.date()}"
+    return [] if key in fired else [(key, "scores")]
+
+
+def _unfinished_recent_kickoffs():
+    from app import SessionLocal, Game
+    s = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        return [r[0] for r in s.query(Game.kickoff).filter(
+            Game.final == False,  # noqa: E712
+            Game.kickoff <= now,
+            Game.kickoff >= now - timedelta(minutes=LIVE_UNTIL_MIN),
+        ).distinct().all()]
+    finally:
+        s.close()
 
 
 def _upcoming_kickoffs():
@@ -182,18 +229,23 @@ def _run(job: str):
             submit_open_week()
         except Exception as e:
             print(f"scheduler: open picks failed ({type(e).__name__}: {e})")
-    elif job == "circa":
-        from sqlalchemy import func
-        from app import SessionLocal, Game
+    elif job in ("circa", "circa_backup"):
+        from app import SessionLocal, Game, CircaSelection
         from loaders.circa_selections import run as circa_run
         s = SessionLocal()
-        row = (s.query(func.max(Game.season), func.max(Game.week))
-                 .filter(Game.final == False).first())  # noqa: E712
         cur = (s.query(Game).filter(Game.final == False)  # noqa: E712
                  .order_by(Game.kickoff).first())
+        have = cur is not None and s.query(CircaSelection).filter_by(
+            season=cur.season, week=cur.week).count() > 0
         s.close()
-        if cur:
-            circa_run(cur.season, cur.week)
+        if cur and not (job == "circa_backup" and have):
+            try:
+                circa_run(cur.season, cur.week)
+            except SystemExit as e:
+                # fetch() raises SystemExit when the PDF is not up yet. Left
+                # alone it would end the scheduler THREAD (it is not an
+                # Exception), silently stopping scores and odds with it.
+                raise RuntimeError(str(e)) from None
     elif job == "scores":
         # Results and grading only. No rank snapshot -- that is weekly by
         # design and taking it daily would break the movement arrows.
@@ -225,6 +277,11 @@ def _loop():
             due += due_kickoff_slots(now_et, fired, _upcoming_kickoffs())
         except Exception as e:   # a DB hiccup must not stop the fixed slots
             print(f"scheduler: kickoff lookup failed ({e})")
+        try:
+            due += due_live_score_slots(now_et, fired,
+                                        _unfinished_recent_kickoffs())
+        except Exception as e:
+            print(f"scheduler: live score lookup failed ({e})")
         for key, job in due:
             fired.add(key)
             print(f"scheduler: firing {key} ({job})")
