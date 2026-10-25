@@ -193,9 +193,18 @@ _event = {"home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills",
 ]}
 _v = _consensus(_event)
 check("consensus averages books' spreads", _v["spread_home_line"] == -3.0)
-check("consensus rounds odds to int", _v["spread_home_odds"] == -108)
+check("consensus averages odds through decimal", _v["spread_home_odds"] == -107)
 check("consensus keeps single-book totals", _v["total_line"] == 47.5)
 check("consensus ml from book 1", _v["ml_home"] == -140)
+from loaders.real_data import avg_american  # noqa: E402
+# books either side of even money: the plain mean of -110 and +108 is -1
+check("avg_american across even money stays a real price",
+      avg_american([-110, 108]) in (-101, 100, -100))
+check("avg_american never lands inside (-100, 100)",
+      all(not -100 < avg_american(p) < 100 for p in
+          ([-110, 108], [-105, 100], [102, -104, -102], [-120, 115], [100, -100])))
+check("avg_american same-sign prices unchanged",
+      avg_american([-110, -110]) == -110 and avg_american([150]) == 150)
 check("consensus None with no spread",
       _consensus({"home_team": "x", "away_team": "y", "bookmakers": []}) is None)
 

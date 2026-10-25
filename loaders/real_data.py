@@ -123,10 +123,31 @@ def _consensus(event: dict) -> dict | None:
     for k, vals in fields.items():
         if not vals:
             continue
-        avg = sum(vals) / len(vals)
-        # lines keep halves (e.g. -3.5); odds round to whole american prices
-        out[k] = round(avg * 2) / 2 if k.endswith("_line") else int(round(avg))
+        if k.endswith("_line"):
+            # lines keep halves (e.g. -3.5)
+            out[k] = round(sum(vals) / len(vals) * 2) / 2
+        else:
+            out[k] = avg_american(vals)
     return out
+
+
+def _to_decimal(american: float) -> float:
+    return 1 + (american / 100 if american > 0 else 100 / -american)
+
+
+def avg_american(prices: list) -> int:
+    """Average american prices through decimal odds, never directly.
+
+    American odds jump from -100 to +100 with nothing in between, so their
+    plain mean is meaningless across that gap: -110 at one book and +108 at
+    another averaged to -1, which reads as a 1% chance and put TB at 98% to
+    beat ATL on the survivor board. Decimal odds are continuous, so averaging
+    there and converting back gives the honest ~-101.
+    """
+    d = sum(_to_decimal(p) for p in prices) / len(prices)
+    if d >= 2:
+        return int(round((d - 1) * 100))
+    return int(round(-100 / (d - 1)))
 
 
 def _match_game(games: list, home_abbr: str, away_abbr: str,
