@@ -154,6 +154,12 @@ check("report card has timing buckets", "by_timing" in rep and rep["by_timing"])
 # --- data hub, explorer, futures --------------------------------------
 check("slate endpoint", len(c.get("/data/slate?week=1").json()) > 0)
 check("trends endpoint", "trends" in c.get("/data/trends").json())
+_t1 = c.get("/data/trends?through_week=1").json()["trends"]
+_t18 = c.get("/data/trends?through_week=18").json()["trends"]
+check("trends through_week counts fewer games early in the season",
+      sum(b["w"] + b["l"] + b["p"] for b in _t1.values())
+      <= sum(b["w"] + b["l"] + b["p"] for b in _t18.values()))
+check("explorer reloads trends on each week", "through_week=" in __import__("explorer_page").EXPLORER_HTML)
 check("futures as_of discipline",
       c.get("/data/futures?season=2026&as_of=2020-01-01T00:00:00"
             ).json()["markets"] == {})

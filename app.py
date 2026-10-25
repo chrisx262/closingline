@@ -1515,8 +1515,13 @@ def circa_selections(week: Optional[int] = None, season: Optional[int] = None,
 
 
 @app.get("/data/trends")
-def trends(season: Optional[int] = None, s: Session = Depends(db)):
-    """Season-wide situational splits from real graded games."""
+def trends(season: Optional[int] = None, through_week: Optional[int] = None,
+           s: Session = Depends(db)):
+    """Situational splits from real graded games, season to date.
+
+    `through_week` stops the count at that week, so the explorer's cards move
+    with the week picked instead of showing the whole season on every tab.
+    """
     # Same trap as the slate: with no season this aggregated every finished
     # game we hold. Harmless while only 2025 was final; silently mixes two
     # seasons the moment 2026 games start landing.
@@ -1524,6 +1529,8 @@ def trends(season: Optional[int] = None, s: Session = Depends(db)):
     q = s.query(Game).filter(Game.final == True)  # noqa: E712
     if season:
         q = q.filter(Game.season == season)
+    if through_week:
+        q = q.filter(Game.week <= through_week)
     buckets = {
         "home_dogs_ats": {"desc": "Home underdogs against the spread",
                           "w": 0, "l": 0, "p": 0},
@@ -1560,7 +1567,8 @@ def trends(season: Optional[int] = None, s: Session = Depends(db)):
         n = b["w"] + b["l"]
         b["pct"] = round(100 * b["w"] / n, 1) if n else None
         b["record"] = f"{b['w']}-{b['l']}" + (f"-{b['p']}" if b["p"] else "")
-    return {"season": season, "note": ("Descriptive splits, not betting advice. "
+    return {"season": season, "through_week": through_week,
+            "note": ("Descriptive splits, not betting advice. "
             "A split needs both persistence across seasons AND positive CLV "
             "before it means anything."), "trends": buckets}
 

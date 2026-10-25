@@ -63,20 +63,25 @@ situations, see how the season actually went.</p></header>
 </main><script>
 let WEEK=1, DATA=[];
 async function boot(){
- const t=await (await fetch('/data/trends')).json();
- document.getElementById('tnote').textContent=t.note;
- document.getElementById('trends').innerHTML=Object.values(t.trends).map(b=>
-  `<div class="tcard"><span class="big">${b.record}</span>`+
-  `<span class="pct">${b.pct===null?'':b.pct+'%'}</span>`+
-  `<div class="lbl">${b.desc}</div></div>`).join('');
  const nav=document.getElementById('weeknav');
  for(let w=1;w<=18;w++){const b=document.createElement('button');
   b.textContent='W'+w;b.id='w'+w;b.onclick=()=>go(w);nav.appendChild(b)}
  go(1);
 }
+/* The cards count the season THROUGH the week picked. They used to be the
+   whole season on every tab, so W1 and W7 looked identical. */
+async function loadTrends(w){
+ const t=await (await fetch('/data/trends?through_week='+w)).json();
+ document.getElementById('tnote').textContent=t.note;
+ document.getElementById('trends').innerHTML=Object.values(t.trends).map(b=>
+  `<div class="tcard"><span class="big">${b.record}</span>`+
+  `<span class="pct">${b.pct===null?'':b.pct+'%'}</span>`+
+  `<div class="lbl">${b.desc} &middot; wk 1&ndash;${w}</div></div>`).join('');
+}
 async function go(w){
  WEEK=w;
  for(let i=1;i<=18;i++)document.getElementById('w'+i).className=i===w?'on':'';
+ loadTrends(w);
  DATA=await (await fetch('/data/slate?week='+w)).json();
  /* Say which season this is. The slate used to return every season's week N,
     so this page showed last year's games with nothing on screen admitting it.
