@@ -752,3 +752,15 @@ pushing to GitHub does NOT deploy. Ship with `railway up --detach` from
 - The Odds API free key -> loaders/real_data.py (task 4)
 - Email provider choice/key when digest sending goes live (task 7/8)
 - Gaming attorney check BEFORE real affiliate links (task 8)
+
+## 2026-10-24 — split-price bug + explorer cards (committed, NOT DEPLOYED)
+- Consensus averaged american prices directly; books either side of even
+  gave -1 etc. TB showed 98% vs ATL in week 8. Now averaged through decimal
+  (`avg_american`). 83/272 2025 openers and ~6 visible 2026 games damaged.
+- `scripts/fix_split_prices.py` (dry-run default) repairs stored rows: exact
+  from data/opening_lines raw where held, else rebuilt from the other side at
+  median hold. Picks listed, never rewritten — ATL wk4 open pick bought at +33
+  (paid 0.33x on a win); owner to decide if that is annotated.
+- Explorer trend cards now count through the selected week (`through_week`).
+- NEEDS OWNER: `railway login` (CLI session expired). Then: `railway up
+  --detach`, run the repair dry-run, then `--apply`, curl /data/survivor wk 8.
