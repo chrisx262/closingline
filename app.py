@@ -1546,6 +1546,16 @@ def props_board():
         ranges = list(_csv.DictReader(open(os.path.join(base, "tracked_ranges.csv"))))
     except FileNotFoundError:
         ranges = []
+    # the 90-minute final check (scripts/final_check.py): inactives + starters
+    try:
+        checks = list(_csv.DictReader(open(os.path.join(base, "final_checks.csv"))))
+    except FileNotFoundError:
+        checks = []
+    final = {(c["season"], c["week"], c["kind"], c["team"], c["player"]): c for c in checks}
+    for kind, rows in (("pick", picks), ("range", ranges)):
+        for r in rows:
+            c = final.get((r["season"], r["week"], kind, r["team"], r["player"]))
+            r["final"] = {"status": c["status"], "note": c["note"]} if c else None
     zones = {z: sum(1 for r in ranges if r["zone"] == z)
              for z in ("below", "inside", "above")}
     return {**board, "picks": picks, "record": record,

@@ -45,6 +45,8 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 .pscroll table.pp{min-width:560px}
 .dbox .pscroll table.pp{min-width:400px;margin:0}
 .zone.inside{color:var(--up);font-weight:900}.zone.below,.zone.above{color:var(--down);font-weight:900}
+.fin{font-size:.6rem;font-weight:800;color:var(--dim)}.fin.ok{color:var(--up)}
+.fin.bad,.fin.warn{color:var(--down)}
 .pnote{color:var(--dim);font-size:.68rem;line-height:1.6;max-width:72ch}
 </style>
 """
@@ -77,7 +79,10 @@ CONTENT = """
 
 <p class="footnote">
 <b>How picks are logged:</b> each pick is written to a file in the public repository before
-kickoff and never edited afterwards, then graded after the game. Best bet = our strongest
+kickoff and never edited afterwards, then graded after the game. <b>Final check:</b> 90 minutes
+before kickoff, when teams post their inactives, every player is re-checked against the
+inactive list and the depth chart: active and starting, OUT (don't bet; graded void), or
+replaced by another starter (don't bet). Best bet = our strongest
 tested lead; small = weaker lead, small stakes; track only = shown for the record, not a bet.
 <div class="rg"><span>21+.</span> Informational only, not financial or betting advice.
 If gambling is a problem, call <span>1-800-GAMBLER</span>.</div>
@@ -93,6 +98,13 @@ function recTxt(r){
   if(!r)return '0-0';
   var s=r.wins+'-'+r.losses+(r.pushes?'-'+r.pushes:'');
   return s+(r.pending?' <span style="font-size:.7rem;color:var(--dim)">('+r.pending+' pending)</span>':'');
+}
+
+function finTxt(f){
+  if(!f)return '<br><span class="fin">final check: pending</span>';
+  var c=f.status==='confirmed'?'ok':(f.status==='backup?'?'warn':'bad');
+  return '<br><span class="fin '+c+'">'+(f.status==='confirmed'?'&#10003; ':'')+
+    esc(f.status==='confirmed'?'active, starting':f.status+' &ndash; '+f.note)+'</span>';
 }
 
 function renderProps(d){
@@ -117,7 +129,7 @@ function renderProps(d){
              (p.actual?' ('+esc(p.actual)+')':'')+'</span>'):'<span class="res pend">pending</span>';
     t+='<tr><td><span class="tier '+cls+'">'+esc(p.tier)+'</span></td>'+
        '<td><b>'+esc(p.player)+'</b><br><span style="color:var(--dim);font-size:.66rem">'+
-       esc(p.team)+' vs '+esc(p.opp)+'</span></td>'+
+       esc(p.team)+' vs '+esc(p.opp)+'</span>'+finTxt(p.final)+'</td>'+
        '<td>'+esc(p.side)+' '+esc(p.line)+' '+esc(STAT[p.stat]||p.stat)+'</td>'+
        '<td class="n">'+esc(p.best_price)+'</td>'+
        '<td class="n">'+esc(p.projection)+' <span style="color:var(--dim)">('+esc(p.gap)+')</span></td>'+
@@ -141,7 +153,7 @@ function renderProps(d){
                 '<span class="res pend">pending</span>';
         t+='<tr><td><b>'+esc(r.player)+'</b><br><span style="color:var(--dim);font-size:.66rem">'+
            esc(r.pos)+' &middot; '+esc(r.team)+' vs '+esc(r.opp)+' &middot; '+esc(r.games)+
-           (r.games==='1'?' game':' games')+'</span></td>'+
+           (r.games==='1'?' game':' games')+'</span>'+finTxt(r.final)+'</td>'+
            '<td class="n">'+esc(r.floor)+'</td><td class="n">'+esc(r.typical)+'</td>'+
            '<td class="n">'+esc(r.ceiling)+'</td><td class="n">'+esc(r.def_floor)+'&ndash;'+
            esc(r.def_ceiling)+'</td><td>'+res+'</td></tr>';

@@ -267,6 +267,8 @@ import importlib.util as _ilu
 _gs = _ilu.spec_from_file_location("grade_props", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "grade_props.py"))
 _gp = _ilu.module_from_spec(_gs); _gs.loader.exec_module(_gp)
+check("props picks and ranges carry their 90-minute final check (or null)",
+      all("final" in r for r in _pb["picks"] + _pb["ranges"]))
 check("grader matches pbp short names to ESPN full names",
       _gp.same("Kenneth Walker III", "K.Walker") and _gp.same("Jared Goff", "J.Goff")
       and not _gp.same("Jared Goff", "D.Goff"))
