@@ -1,5 +1,5 @@
 logged_at_utc,season,week,player,team,opp,stat,side,line,best_price,book,projection,gap,lead,tier,result,actual
-2026-11-15T05:00Z,2026,10,Jared Goff,DET,NE,pass_attempts,Under,34.5,-105,consensus,29.8,-4.7,QB attempts under vs worst-8 pass D (ypa),BEST BET,,
+2026-11-15T05:00Z,2026,10,Jared Goff,DET,NE,pass_attempts,Under,34.5,-105,consensus,29.8,-4.7,QB attempts under vs worst-8 pass D (ypa),BEST BET,win,31
 2026-11-15T05:00Z,2026,10,Jaylen Warren,PIT,CIN,rush_yds,Over,63.5,-114,draftkings,89.0,+25.5,RB trimmed carries x blend ypc (line>=60),small,,
 2026-11-15T05:00Z,2026,10,Zach Charbonnet,SEA,LV,rush_yds,Over,65.5,-111,draftkings,84.4,+18.9,RB trimmed carries x blend ypc (line>=60),small,,
 2026-11-15T05:00Z,2026,10,Christian McCaffrey,SF,DAL,rush_yds,Over,62.5,-113,fanduel,80.3,+17.8,RB trimmed carries x blend ypc (line>=60),small,,

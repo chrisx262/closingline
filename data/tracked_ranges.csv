@@ -1,6 +1,6 @@
 logged_at_utc,season,week,list,pos,player,team,opp,games,floor,typical,ceiling,def_floor,def_ceiling,actual,zone
-2026-11-15T13:49Z,2026,10,both,QB,J.Goff,DET,NE,8,170,259,412,182,372,,
-2026-11-15T13:49Z,2026,10,eric,QB,D.Maye,NE,DET,9,178,247,374,128,410,,
+2026-11-15T13:49Z,2026,10,both,QB,J.Goff,DET,NE,8,170,259,412,182,372,303,inside
+2026-11-15T13:49Z,2026,10,eric,QB,D.Maye,NE,DET,9,178,247,374,128,410,48,below
 2026-11-15T13:49Z,2026,10,eric,QB,S.Sanders,CLE,HOU,1,297,297,297,170,335,,void
 2026-11-15T13:49Z,2026,10,both,QB,T.Lawrence,JAX,TEN,7,182,242,331,118,462,,
 2026-11-15T13:49Z,2026,10,ours,QB,D.Jones,IND,MIA,9,108,192,269,160,287,,
