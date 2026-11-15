@@ -753,7 +753,7 @@ pushing to GitHub does NOT deploy. Ship with `railway up --detach` from
 - Email provider choice/key when digest sending goes live (task 7/8)
 - Gaming attorney check BEFORE real affiliate links (task 8)
 
-## 2026-10-24 — split-price bug + explorer cards (committed, NOT DEPLOYED)
+## 2026-10-24 — split-price bug + explorer cards (DEPLOYED + REPAIRED 2026-11-14)
 - Consensus averaged american prices directly; books either side of even
   gave -1 etc. TB showed 98% vs ATL in week 8. Now averaged through decimal
   (`avg_american`). 83/272 2025 openers and ~6 visible 2026 games damaged.
@@ -764,3 +764,8 @@ pushing to GitHub does NOT deploy. Ship with `railway up --detach` from
 - Explorer trend cards now count through the selected week (`through_week`).
 - NEEDS OWNER: `railway login` (CLI session expired). Then: `railway up
   --detach`, run the repair dry-run, then `--apply`, curl /data/survivor wk 8.
+- 2026-11-14: deployed (1209ca96), repair applied to prod: 904 snapshots
+  (90 exact from raw, 1005 prices rebuilt). Old values in
+  data/backups/split_prices_before_2026-11-14.txt. Re-run finds 0. Survivor
+  board scan: no implausible win probs left. 8 picks touched (listed in the
+  backup file) left as recorded — owner decision pending.
