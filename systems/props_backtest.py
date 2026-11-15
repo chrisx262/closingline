@@ -78,8 +78,17 @@ def run(path, first_week=FIRST_WEEK):
             cmp_vs = (sum(v[1] for k, v in starts.items() if k[4] in worst) /
                       sum(v[0] for k, v in starts.items() if k[4] in worst))
 
+            # The starter is chosen BEFORE the game (his team's most recent
+            # 15+ attempt passer). Filtering on attempts in the game being
+            # predicted would drop every early injury or benching.
+            lead = {}
+            for (wk, gid, name, pos, de), (aa, cc, yy) in before.items():
+                if aa >= MIN_ATT and (pos not in lead or wk > lead[pos][0]):
+                    lead[pos] = (wk, name)
             for k, (a, c, y) in games.items():
-                if k[0] != W or a < MIN_ATT or k[4] not in worst:
+                if k[0] != W or k[4] not in worst:
+                    continue
+                if lead.get(k[3], (0, None))[1] != k[2]:
                     continue
                 q = qb.get(k[2])
                 if not q or q[0] < 2:
