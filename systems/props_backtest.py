@@ -14,7 +14,7 @@ import sys
 from collections import defaultdict
 
 MIN_ATT = 15
-FIRST_WEEK = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+FIRST_WEEK = 5
 
 
 def load(path):
@@ -42,12 +42,13 @@ def trimmed(xs, n=1):
     return xs[n:-n] if len(xs) > 2 * n + 2 else xs
 
 
-def run(path):
+def run(path, first_week=FIRST_WEEK):
     games = load(path)
     last_week = max(k[0] for k in games)
     res = defaultdict(list)          # method -> [(pred, actual)]
+    rows = []                        # one per (start, ranking), for line checks
     floor_hits = defaultdict(lambda: [0, 0])
-    for W in range(FIRST_WEEK, last_week + 1):
+    for W in range(first_week, last_week + 1):
         before = {k: v for k, v in games.items() if k[0] < W}
         # defense tallies (every pass, not just starters)
         d = defaultdict(lambda: [0, 0, 0.0, set()])
@@ -101,13 +102,20 @@ def run(path):
                         (att * own_cmp * ypc[de], y))
                 res[tag + "yds QB season avg (overall-average baseline)"].append(
                     (own_ypg, y))
+                rows.append({"week": W, "game_id": k[1], "qb": k[2],
+                             "team": k[3], "opp": de, "ranking": rk,
+                             "att": a, "cmp": c, "yds": y,
+                             "p_att": avg_trim, "p_att_own": own_att,
+                             "p_cmp_pct": blend,
+                             "p_yds": avg_trim * blend * ypc[de],
+                             "p_yds_avg": own_ypg})
                 res[tag + "cmp% own"].append((own_cmp, c / a))
                 res[tag + "cmp% blend"].append((blend, c / a))
                 res[tag + "cmp% group vs weak D"].append((cmp_vs, c / a))
-    return res, floor_hits
+    return res, floor_hits, rows
 
 
-def report(res, floor_hits):
+def report(res, floor_hits, rows=None):
     print(f"{'method':<58}{'n':>5}{'avg miss':>10}{'bias':>8}")
     for k in sorted(res):
         pa = res[k]
@@ -121,4 +129,4 @@ def report(res, floor_hits):
 
 
 if __name__ == "__main__":
-    report(*run(sys.argv[1]))
+    report(*run(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else FIRST_WEEK))
