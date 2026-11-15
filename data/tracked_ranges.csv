@@ -7,7 +7,7 @@ logged_at_utc,season,week,list,pos,player,team,opp,games,floor,typical,ceiling,d
 2026-11-15T13:49Z,2026,10,ours,QB,M.Willis,MIA,IND,8,85,182,220,102,382,,void
 2026-11-15T13:49Z,2026,10,eric,QB,B.Young,CAR,NO,8,163,279,361,152,297,,
 2026-11-15T13:49Z,2026,10,eric,QB,G.Smith,NYJ,BUF,9,119,234,321,81,383,,
-2026-11-15T13:49Z,2026,10,ours,QB,D.Lock,SEA,LV,3,175,199,235,192,374,,
+2026-11-15T13:49Z,2026,10,ours,QB,D.Lock,SEA,LV,3,175,199,235,192,374,,void
 2026-11-15T13:49Z,2026,10,ours,QB,M.Stafford,LA,ARI,9,155,261,390,175,297,,
 2026-11-15T13:49Z,2026,10,ours,QB,J.Fagnano,BAL,LAC,2,60,76,91,123,384,,void
 2026-11-15T13:49Z,2026,10,both,RB,K.Walker,KC,ATL,8,36,110,177,43,170,,
@@ -21,3 +21,4 @@ logged_at_utc,season,week,list,pos,player,team,opp,games,floor,typical,ceiling,d
 2026-11-15T13:49Z,2026,10,eric,RB,D.Henry,BAL,LAC,9,45,71,144,48,154,,
 2026-11-15T14:05Z,2026,10,eric,QB,D.Watson,CLE,HOU,8,144,223,324,170,335,,
 2026-11-15T14:05Z,2026,10,ours,QB,J.Brissett,BAL,LAC,8,95,222,292,123,384,,
+2026-11-15T19:59Z,2026,10,ours,QB,S.Darnold,SEA,LV,6,168,230,379,192,374,,
