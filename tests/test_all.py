@@ -238,7 +238,7 @@ if shutil.which("node"):
     import tempfile as _tf  # noqa: E402
     _dir = _tf.mkdtemp()
     _pages = ["/", "/survivor", "/survivor/sim", "/moneyline", "/circa",
-              "/explorer", "/picks-board"]
+              "/props", "/explorer", "/picks-board"]
     _files = []
     for _u in _pages:
         _n = (_u.strip("/").replace("/", "_") or "board") + ".html"
@@ -253,6 +253,13 @@ if shutil.which("node"):
           _r.returncode == 0)
 else:
     print("SKIP  page JavaScript smoke test (node not installed)")
+
+_pb = c.get("/data/props").json()
+check("props board serves picks and both defense lists",
+      _pb.get("picks") and set(_pb["defenses"]) == {"pass", "run"})
+check("props record counts best bets separately from track-only",
+      "BEST BET" in _pb["record"] and "track only" in _pb["record"])
+check("props page is in the nav", '/props' in c.get("/circa").text)
 
 # A record of 11-5 is a claim; the picks behind it are the evidence. The board
 # showed totals and nothing else, so nobody could check it.

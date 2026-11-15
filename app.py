@@ -1514,6 +1514,38 @@ def circa_selections(week: Optional[int] = None, season: Optional[int] = None,
             "note": ("A tie eliminates in Circa, so a tie counts as out.")}
 
 
+@app.get("/data/props")
+def props_board():
+    """This week's tracked prop picks, the running record, and the defense lists.
+
+    Read from two files kept in the repo, data/props_board.json and
+    data/tracked_props.csv, so every pick is on public record (git history)
+    from the moment it is logged -- before kickoff, never edited after.
+    Informational only; the record is shown win or lose.
+    """
+    import csv as _csv
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    try:
+        board = _json.load(open(os.path.join(base, "props_board.json")))
+        picks = list(_csv.DictReader(open(os.path.join(base, "tracked_props.csv"))))
+    except FileNotFoundError:
+        return {"picks": [], "record": {}, "note": "no props board yet"}
+
+    def rec(rows):
+        w = sum(1 for r in rows if r["result"] == "win")
+        l = sum(1 for r in rows if r["result"] == "loss")
+        p = sum(1 for r in rows if r["result"] == "push")
+        pend = sum(1 for r in rows if not r["result"])
+        return {"wins": w, "losses": l, "pushes": p, "pending": pend}
+
+    record = {t: rec([r for r in picks if r["tier"] == t])
+              for t in ("BEST BET", "small", "track only")}
+    record["all bets"] = rec([r for r in picks if r["tier"] != "track only"])
+    return {**board, "picks": picks, "record": record,
+            "note": ("Logged before kickoff and never edited. Small samples: "
+                     "a lead is not proven until it wins live.")}
+
+
 @app.get("/data/trends")
 def trends(season: Optional[int] = None, through_week: Optional[int] = None,
            s: Session = Depends(db)):
@@ -1590,6 +1622,12 @@ def explorer():
 def moneyline_page():
     from moneyline_page import MONEYLINE_HTML
     return MONEYLINE_HTML
+
+
+@app.get("/props", response_class=HTMLResponse)
+def props_page():
+    from props_page import PROPS_HTML
+    return PROPS_HTML
 
 
 @app.get("/circa", response_class=HTMLResponse)
