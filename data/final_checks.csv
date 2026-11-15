@@ -2,3 +2,11 @@ checked_at_utc,season,week,kind,team,player,status,starter,note
 2026-11-15T14:18Z,2026,10,pick,DET,Jared Goff,confirmed,,"active, starting"
 2026-11-15T14:18Z,2026,10,range,DET,J.Goff,confirmed,,"active, starting"
 2026-11-15T14:18Z,2026,10,range,NE,D.Maye,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,range,CLE,D.Watson,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,pick,HOU,Woody Marks,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,range,HOU,W.Marks,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,range,JAX,T.Lawrence,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,range,IND,D.Jones,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,pick,MIA,Greg Dulcich,confirmed,,"active, starting"
+2026-11-15T16:45Z,2026,10,range,MIA,M.Willis,OUT,Kyle McCord,Kyle McCord has no starts this season - no range
+2026-11-15T16:45Z,2026,10,range,MIA,O.Gordon,confirmed,,"active, starting"
