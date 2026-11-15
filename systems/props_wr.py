@@ -101,12 +101,23 @@ def run(path):
                     catch = (st_rec / st_tgt + cmpa[de]) / 2
                     ypr = (st_yds / st_rec + ypc[de]) / 2
                     act = rcv.get(g + (name,), [0, 0, 0.0])
+                    # raw target volume: last 3 team games vs his season rate
+                    played = sorted({k[0] for k, v in rcv.items()
+                                     if k[2] == pos and k[4] == name and k[0] < W})
+                    l3 = played[-3:]
+                    tgt_l3 = sum(v[0] for k, v in rcv.items() if k[2] == pos
+                                 and k[4] == name and k[0] in l3) / max(len(l3), 1)
+                    tgt_season = st_tgt / max(len(played), 1)
+                    own_catch, own_ypr = st_rec / st_tgt, st_yds / st_rec
                     rows.append({"week": W, "game_id": gid, "player": name,
                                  "team": pos, "opp": de, "ranking": rk,
                                  "rec": act[1], "yds": act[2],
                                  "p_rec": share * team_att * catch,
                                  "p_yds": share * team_att * catch * ypr,
-                                 "p_yds_avg": st_yds / len(season)})
+                                 "p_yds_avg": st_yds / len(season),
+                                 "tgt_l3": tgt_l3, "tgt_season": tgt_season,
+                                 "p_rec_tgt": tgt_l3 * own_catch,
+                                 "p_yds_tgt": tgt_l3 * own_catch * own_ypr})
     return rows
 
 
