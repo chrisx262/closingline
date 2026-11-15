@@ -126,7 +126,7 @@ function renderProps(d){
   document.getElementById('ppicks').innerHTML=wk.length?'<div class="pscroll">'+t+'</table></div>':
     '<div class="empty">No picks logged for this week yet.</div>';
 
-  var rg=(d.ranges||[]).filter(function(r){return String(r.week)===String(d.week);});
+  var rg=(d.ranges||[]).filter(function(r){return String(r.week)===String(d.week)&&r.zone!=='void';});
   var Z=d.range_zones||{};
   document.getElementById('pzones').innerHTML=(Z.inside+Z.below+Z.above)?
     'So far: <b>'+Z.inside+'</b> inside, <b>'+Z.below+'</b> below, <b>'+Z.above+'</b> above.':'';

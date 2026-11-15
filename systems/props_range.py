@@ -15,7 +15,11 @@ usually land so we can see how often the game lands below, inside or above.
 The starter is chosen before the game: the team's leading passer / rusher
 (10+ carries) in its most recent game. Same rule as the backtests.
 
+Starter news the play-by-play can't know (a trade, a QB back from injury)
+is passed by hand; his range then uses his starts for any team this season:
+
   python3 systems/props_range.py PBP_CSV_GZ SEASON WEEK [--write]
+      [--starter BAL:QB=J.Brissett ...] [--only-starters]
 """
 import csv
 import gzip
@@ -72,7 +76,7 @@ def trimmed(vals):
     return sum(v) / len(v)
 
 
-def ranges(pbp, week, lists, matchups):
+def ranges(pbp, week, lists, matchups, starter=None):
     """lists = {"ours"|"eric": {"QB": [...pass D], "RB": [...run D]}};
     matchups = [(team, opp)]. A player facing a defense on both lists gets
     list "both"."""
@@ -87,8 +91,11 @@ def ranges(pbp, week, lists, matchups):
             mine = [k for k in st if k[2] == team]
             if not mine:
                 continue
-            name = st[max(mine)][0]                      # starter, most recent game
-            own = [v[1] for k, v in st.items() if k[2] == team and v[0] == name]
+            hand = (starter or {}).get(f"{team}:{pos}")
+            name = hand or st[max(mine)][0]              # starter, most recent game
+            own = [v[1] for k, v in st.items() if v[0] == name and (hand or k[2] == team)]
+            if not own:
+                continue
             allowed = [v[1] for k, v in st.items() if v[3] == opp]
             rows.append({"list": "both" if len(on) == 2 else on[0], "pos": pos, "player": name, "team": team, "opp": opp,
                          "games": len(own), "floor": f"{min(own):g}",
@@ -121,7 +128,12 @@ if __name__ == "__main__":
     board = json.load(open(os.path.join(ROOT, "data", "props_board.json")))
     lists = {n: {"QB": board["defenses"]["pass"][n], "RB": board["defenses"]["run"][n]}
              for n in ("ours", "eric")}
-    rows = ranges(pbp, week, lists, matchups_for(season, week))
+    args = sys.argv[4:]
+    starter = dict(a.split("=", 1) for i, a in enumerate(args)
+                   if i and args[i - 1] == "--starter")
+    rows = ranges(pbp, week, lists, matchups_for(season, week), starter)
+    if "--only-starters" in args:                # just the hand-set starters
+        rows = [r for r in rows if f"{r['team']}:{r['pos']}" in starter]
     for r in rows:
         print(f"{r['list']:<4} {r['pos']} {r['player']:<14} {r['team']:>3} vs {r['opp']:<3} "
               f"n={r['games']}  floor {r['floor']:>4}  typical {r['typical']:>4}  "
