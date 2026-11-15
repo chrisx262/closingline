@@ -260,6 +260,16 @@ check("props board serves picks and both defense lists",
 check("props record counts best bets separately from track-only",
       "BEST BET" in _pb["record"] and "track only" in _pb["record"])
 check("props page is in the nav", '/props' in c.get("/circa").text)
+check("props board serves floor/ceiling rows tagged ours / eric / both",
+      _pb.get("ranges") and {r["list"] for r in _pb["ranges"]} <= {"ours", "eric", "both"}
+      and set(_pb["range_zones"]) == {"below", "inside", "above"})
+import importlib.util as _ilu
+_gs = _ilu.spec_from_file_location("grade_props", os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "grade_props.py"))
+_gp = _ilu.module_from_spec(_gs); _gs.loader.exec_module(_gp)
+check("grader matches pbp short names to ESPN full names",
+      _gp.same("Kenneth Walker III", "K.Walker") and _gp.same("Jared Goff", "J.Goff")
+      and not _gp.same("Jared Goff", "D.Goff"))
 
 # A record of 11-5 is a claim; the picks behind it are the evidence. The board
 # showed totals and nothing else, so nobody could check it.

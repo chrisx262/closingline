@@ -43,6 +43,8 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 .lead b{font-size:.78rem}.lead p{margin:.15rem 0;font-size:.72rem;color:var(--dim)}
 .pscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 .pscroll table.pp{min-width:560px}
+.dbox .pscroll table.pp{min-width:400px;margin:0}
+.zone.inside{color:var(--up);font-weight:900}.zone.below,.zone.above{color:var(--down);font-weight:900}
 .pnote{color:var(--dim);font-size:.68rem;line-height:1.6;max-width:72ch}
 </style>
 """
@@ -60,6 +62,12 @@ CONTENT = """
   <div class="pstat" id="pstat"></div>
   <h2>This week's <em>picks</em></h2>
   <div id="ppicks"></div>
+  <h2>Floor &amp; <em>ceiling</em></h2>
+  <p class="pnote">Not bets &mdash; tracking. Each QB's passing yards and lead back's rushing
+  yards this season (lowest, typical, highest), next to the fewest and most yards that defense
+  has allowed. Logged before kickoff; after the game we mark whether he landed below, inside or
+  above his range. <span id="pzones"></span></p>
+  <div class="dgrid" id="pranges"></div>
   <h2>The 8 worst <em>defenses</em></h2>
   <div class="dgrid" id="pdef"></div>
   <h2>What the <em>testing</em> said</h2>
@@ -117,6 +125,32 @@ function renderProps(d){
   });
   document.getElementById('ppicks').innerHTML=wk.length?'<div class="pscroll">'+t+'</table></div>':
     '<div class="empty">No picks logged for this week yet.</div>';
+
+  var rg=(d.ranges||[]).filter(function(r){return String(r.week)===String(d.week);});
+  var Z=d.range_zones||{};
+  document.getElementById('pzones').innerHTML=(Z.inside+Z.below+Z.above)?
+    'So far: <b>'+Z.inside+'</b> inside, <b>'+Z.below+'</b> below, <b>'+Z.above+'</b> above.':'';
+  var rh='';
+  [['ours','Our 8 worst'],['eric',"Eric's 8 worst"]].forEach(function(L){
+    var rs=rg.filter(function(r){return r.list===L[0]||r.list==='both';});
+    var t='<table class="pp"><tr><th>Player</th><th class="n">Floor</th><th class="n">Typical</th>'+
+          '<th class="n">Ceiling</th><th class="n">D allowed</th><th>Result</th></tr>';
+    ['QB','RB'].forEach(function(pos){
+      rs.filter(function(r){return r.pos===pos;}).forEach(function(r){
+        var res=r.zone?'<span class="zone '+esc(r.zone)+'">'+esc(r.actual||'-')+' '+esc(r.zone)+'</span>':
+                '<span class="res pend">pending</span>';
+        t+='<tr><td><b>'+esc(r.player)+'</b><br><span style="color:var(--dim);font-size:.66rem">'+
+           esc(r.pos)+' &middot; '+esc(r.team)+' vs '+esc(r.opp)+' &middot; '+esc(r.games)+
+           (r.games==='1'?' game':' games')+'</span></td>'+
+           '<td class="n">'+esc(r.floor)+'</td><td class="n">'+esc(r.typical)+'</td>'+
+           '<td class="n">'+esc(r.ceiling)+'</td><td class="n">'+esc(r.def_floor)+'&ndash;'+
+           esc(r.def_ceiling)+'</td><td>'+res+'</td></tr>';
+      });
+    });
+    rh+='<div class="dbox"><h3>'+L[1]+'</h3><div class="pscroll">'+t+'</table></div></div>';
+  });
+  document.getElementById('pranges').innerHTML=rg.length?rh:
+    '<div class="empty">No floor / ceiling rows logged for this week yet.</div>';
 
   var h='';
   ['pass','run'].forEach(function(k){

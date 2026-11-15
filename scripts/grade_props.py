@@ -28,7 +28,10 @@ ESPN_TEAM = {"WSH": "WAS", "LAR": "LA", "JAC": "JAX"}
 # which box-score table and column holds each stat
 STAT = {"pass_attempts": ("passing", "C/ATT", lambda v: float(v.split("/")[1])),
         "rush_yds": ("rushing", "YDS", float),
-        "rec_yds": ("receiving", "YDS", float)}
+        "rec_yds": ("receiving", "YDS", float),
+        "pass_yds": ("passing", "YDS", float)}
+RANGES = os.path.join(ROOT, "data", "tracked_ranges.csv")
+RANGE_STAT = {"QB": "pass_yds", "RB": "rush_yds"}
 
 
 def log(msg):
@@ -78,16 +81,55 @@ def box(event_id):
 def same(a, b):
     norm = lambda s: s.lower().replace(".", "").replace(" jr", "").replace(" iii", "") \
         .replace(" ii", "").strip()
+    if "." in b and " " not in b.split(".", 1)[0]:      # pbp short name, "J.Goff"
+        init, last = b.split(".", 1)
+        return norm(a).endswith(" " + norm(last)) and a[:1].upper() == init[:1].upper()
     return norm(a) == norm(b)
 
 
+def grade_ranges():
+    """Fill actual + zone (below / inside / above his floor-ceiling) for the
+    logged floor/ceiling rows whose games are final."""
+    if not os.path.exists(RANGES):
+        return 0
+    rows = list(csv.DictReader(open(RANGES)))
+    fields = list(rows[0].keys()) if rows else []
+    todo = [r for r in rows if not r["zone"]]
+    changed = 0
+    for (season, week) in sorted({(r["season"], r["week"]) for r in todo}):
+        games = week_games(season, week)
+        boxes = {}
+        for r in [x for x in todo if (x["season"], x["week"]) == (season, week)]:
+            g = games.get(r["team"])
+            if not g or not g[1]:
+                continue
+            if g[0] not in boxes:
+                boxes[g[0]] = box(g[0])
+            vals = boxes[g[0]].get((r["team"], RANGE_STAT[r["pos"]]), {})
+            actual = next((v for n, v in vals.items() if same(n, r["player"])), None)
+            if actual is None:
+                r["actual"], r["zone"] = "", "void"
+            else:
+                r["actual"] = f"{actual:g}"
+                r["zone"] = ("below" if actual < float(r["floor"]) else
+                             "above" if actual > float(r["ceiling"]) else "inside")
+            changed += 1
+            log(f"range {r['player']}: {r['actual'] or '-'} -> {r['zone']}")
+    if changed:
+        with open(RANGES, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=fields)
+            w.writeheader()
+            w.writerows(rows)
+    return changed
+
+
 def main():
+    changed = grade_ranges()
     rows = list(csv.DictReader(open(CSV)))
     fields = list(rows[0].keys())
     todo = [r for r in rows if not r["result"]]
     if not todo:
-        log("nothing to grade"); return False
-    changed = 0
+        log("no picks to grade"); return changed > 0
     for (season, week) in sorted({(r["season"], r["week"]) for r in todo}):
         games = week_games(season, week)
         boxes = {}
@@ -127,7 +169,7 @@ def publish():
         p = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
         log(f"$ {' '.join(cmd[:3])} -> {p.returncode} {p.stderr.strip()[-200:]}")
         return p.returncode == 0
-    run("git", "add", "data/tracked_props.csv")
+    run("git", "add", "data/tracked_props.csv", "data/tracked_ranges.csv")
     if not run("git", "commit", "-m", "Grade tracked props\n\n"
                "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"):
         return

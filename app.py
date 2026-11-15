@@ -1541,7 +1541,15 @@ def props_board():
     record = {t: rec([r for r in picks if r["tier"] == t])
               for t in ("BEST BET", "small", "track only")}
     record["all bets"] = rec([r for r in picks if r["tier"] != "track only"])
+    # floor / ceiling tracking (not bets): how often games land inside the range
+    try:
+        ranges = list(_csv.DictReader(open(os.path.join(base, "tracked_ranges.csv"))))
+    except FileNotFoundError:
+        ranges = []
+    zones = {z: sum(1 for r in ranges if r["zone"] == z)
+             for z in ("below", "inside", "above")}
     return {**board, "picks": picks, "record": record,
+            "ranges": ranges, "range_zones": zones,
             "note": ("Logged before kickoff and never edited. Small samples: "
                      "a lead is not proven until it wins live.")}
 
