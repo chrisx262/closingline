@@ -82,7 +82,7 @@ CONTENT = """
 kickoff and never edited afterwards, then graded after the game. <b>Final check:</b> 90 minutes
 before kickoff, when teams post their inactives, every player is re-checked against the
 inactive list and the depth chart: active and starting, OUT (don't bet; graded void), or
-replaced by another starter (don't bet). Best bet = our strongest
+backup? (not first on the depth chart &mdash; check the news before betting). Best bet = our strongest
 tested lead; small = weaker lead, small stakes; track only = shown for the record, not a bet.
 <div class="rg"><span>21+.</span> Informational only, not financial or betting advice.
 If gambling is a problem, call <span>1-800-GAMBLER</span>.</div>

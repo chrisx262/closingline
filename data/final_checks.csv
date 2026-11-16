@@ -16,7 +16,7 @@ checked_at_utc,season,week,kind,team,player,status,starter,note
 2026-11-15T16:56Z,2026,10,range,CAR,C.Hubbard,confirmed,,"active, starting"
 2026-11-15T16:56Z,2026,10,range,NYJ,G.Smith,confirmed,,"active, starting"
 2026-11-15T19:59Z,2026,10,pick,SEA,Zach Charbonnet,confirmed,,"active, starting"
-2026-11-15T19:59Z,2026,10,range,SEA,D.Lock,replaced,Sam Darnold,replaced by S.Darnold (6 starts)
+2026-11-15T19:59Z,2026,10,range,SEA,D.Lock,backup?,Sam Darnold,"depth chart listed Darnold (ruled out) first; Lock started - corrected, range kept"
 2026-11-15T19:59Z,2026,10,range,SEA,Z.Charbonnet,confirmed,,"active, starting"
 2026-11-15T19:59Z,2026,10,pick,LA,Tyler Higbee,confirmed,,"active, starting"
 2026-11-15T19:59Z,2026,10,range,LA,M.Stafford,confirmed,,"active, starting"

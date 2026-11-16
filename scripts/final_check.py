@@ -7,12 +7,12 @@ within minutes. For every game entering that window this script:
      and the depth chart (first QB / RB not inactive = the starter);
   2. checks every logged pick and floor/ceiling row on those teams:
        confirmed  -- he is active and still the starter
-       OUT        -- he is inactive (picks: don't bet; graded void)
-       replaced   -- QB: active but someone else starts (picks: don't bet)
-       backup?    -- RB: active but not first on the depth chart. Backfields
-                     are shared and depth charts lag, so this is a warning only
-  3. for a replaced floor/ceiling row, voids it and logs the real starter's
-     range, so the final projection is for the player who actually plays.
+       OUT        -- inactive or ruled out (picks: don't bet; graded void)
+       backup?    -- active but not first on the depth chart. Depth charts lag
+                     (wk 10: Darnold, already ruled out, was still listed over
+                     Lock, who started), so this is a warning only
+  3. for an OUT floor/ceiling row, voids it and logs the range of the next
+     player on the depth chart who is not out.
 
 Logged picks are never edited -- the verdict goes to data/final_checks.csv
 beside them. Runs every 10 minutes from launchd; each game is checked once.
@@ -153,14 +153,13 @@ def main(now):
                     return "OUT", ""
                 d, s = start.get(pos, ("", ""))
                 if pos and d and not gp.same(d, player):
-                    return ("replaced" if pos == "QB" else "backup?"), d
+                    return "backup?", d
                 return "confirmed", ""
 
             for p in [x for x in picks if x["team"] == t]:
                 pos = {"pass_attempts": "QB", "rush_yds": "RB"}.get(p["stat"])
                 st, by = verdict(p["player"], pos)
                 note = {"OUT": "inactive - don't bet (graded void)",
-                        "replaced": f"{by} starts - don't bet",
                         "backup?": f"depth chart lists {by} first - check before betting"
                         }.get(st, "active, starting")
                 new_checks.append({"checked_at_utc": stamp, "season": season, "week": week,
@@ -171,7 +170,7 @@ def main(now):
                 st, by = verdict(r["player"], r["pos"])
                 note = ("active, starting" if st == "confirmed" else
                         f"depth chart lists {by} first - range kept")
-                if st in ("OUT", "replaced"):
+                if st == "OUT":
                     r["zone"] = "void"
                     by = by or start[r["pos"]][0]
                     short = start[r["pos"]][1].replace(" ", "")
