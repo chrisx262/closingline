@@ -4,6 +4,6 @@ logged_at_utc,season,week,player,team,opp,stat,side,line,best_price,book,project
 2026-11-15T05:00Z,2026,10,Zach Charbonnet,SEA,LV,rush_yds,Over,65.5,-111,draftkings,84.4,+18.9,RB trimmed carries x blend ypc (line>=60),small,win,94
 2026-11-15T05:00Z,2026,10,Christian McCaffrey,SF,DAL,rush_yds,Over,62.5,-113,fanduel,80.3,+17.8,RB trimmed carries x blend ypc (line>=60),small,loss,62
 2026-11-15T05:00Z,2026,10,Woody Marks,HOU,CLE,rush_yds,Over,59.5,-116,betonlineag,72.1,+12.6,RB trimmed carries x blend ypc (line<60 = coin flip in test),track only,loss,50
-2026-11-15T06:30Z,2026,10,Justice Hill,BAL,LAC,rec_yds,Over,11.5,-115,consensus,29.6,+18.1,WR targets method (LOST in backtest),track only,,
+2026-11-15T06:30Z,2026,10,Justice Hill,BAL,LAC,rec_yds,Over,11.5,-115,consensus,29.6,+18.1,WR targets method (LOST in backtest),track only,win,34
 2026-11-15T06:30Z,2026,10,Greg Dulcich,MIA,IND,rec_yds,Over,32.5,-115,consensus,47.3,+14.8,WR targets method (LOST in backtest),track only,loss,0
 2026-11-15T06:30Z,2026,10,Tyler Higbee,LA,ARI,rec_yds,Under,35.5,-113,consensus,25.0,-10.5,WR targets method (LOST in backtest),track only,win,17
