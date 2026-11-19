@@ -55,7 +55,7 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 CONTENT = """
 <div class="hero">
   <h1>Player <em>Props</em></h1>
-  <p>QBs facing the 8 worst pass defenses and running backs facing the 6 worst run defenses, projected with a trimmed average (drop each
+  <p>QBs facing the 8 worst pass defenses and running backs facing the 8 worst run defenses, projected with a trimmed average (drop each
   group's highest and lowest game) and tested against real sportsbook lines from 2025
   and 2026 before anything went on this page. Two leads survived. Receivers did not.</p>
   <div class="countdown" id="pweek">Loading&hellip;</div>

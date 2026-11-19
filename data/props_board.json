@@ -34,7 +34,9 @@
         "IND",
         "ATL",
         "CLE",
-        "CIN"
+        "CIN",
+        "DEN",
+        "NYJ"
       ],
       "eric": [
         "DAL",
@@ -42,10 +44,12 @@
         "NYJ",
         "IND",
         "ATL",
-        "ARI"
+        "ARI",
+        "NO",
+        "CLE"
       ],
-      "ours_basis": "rushing yards allowed per carry (6 worst)",
-      "eric_basis": "rushing yards allowed per game (Eric's method, 6 worst)"
+      "ours_basis": "rushing yards allowed per carry",
+      "eric_basis": "rushing yards allowed per game (Eric's method)"
     }
   },
   "leads": [
@@ -58,7 +62,7 @@
     },
     {
       "key": "rb_yds",
-      "name": "RB rushing yards OVER vs the 6 worst run D",
+      "name": "RB rushing yards OVER vs the 8 worst run D",
       "rule": "Trimmed carries x blended yards per carry; bet the OVER when it beats the line by 10+ yards AND the back's team is favored (teams that fall behind stop running). Skip underdogs.",
       "backtest": "Overs 10+ above the line: favorites 21-10 (2025 10-7, 2026 11-3), underdogs 13-15. Lead backs overall: team won 59% overs, team lost 26%.",
       "status": "small lead"

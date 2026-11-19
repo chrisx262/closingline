@@ -1,5 +1,5 @@
 """This week's first-look projections: QBs vs the 8 worst pass Ds, lead RBs
-vs the 6 worst run Ds.
+vs the 8 worst run Ds.
 
 A first look, not the final word: run it early in the week, re-run it as
 injury news lands (games not yet started are rebuilt, games already started
@@ -50,8 +50,8 @@ from props_eval import implied, med_price  # noqa: E402
 BOARD = os.path.join(ROOT, "data", "props_board.json")
 ODDS = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl"
 KEY = os.environ.get("ODDS_API_KEY")
-# Chris, 2026-11-19: the 8 worst pass defenses, but only the 6 worst run defenses
-N_PASS, N_RUN = 8, 6
+# Chris, 2026-11-19: the 8 worst pass and the 8 worst run defenses
+N_PASS, N_RUN = 8, 8
 FIELDS = pr.FIELDS + ["proj", "line", "fav_by", "lean", "status"]
 
 
