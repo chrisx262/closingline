@@ -5,14 +5,14 @@
   "defenses": {
     "pass": {
       "ours": [
-        "LV",
         "TEN",
+        "LV",
         "ARI",
-        "CHI",
         "NE",
         "IND",
         "MIA",
-        "DAL"
+        "DAL",
+        "LAC"
       ],
       "eric": [
         "TEN",
@@ -74,5 +74,247 @@
       "backtest": "Lost in ~380 bets; target methods failed the 2026 check",
       "status": "no edge - track only"
     }
-  ]
+  ],
+  "roster_changes": {
+    "CHI": {
+      "since": 8,
+      "why": "Jeffery Simmons traded in: fewer blitzes, better coverage (6.5 yds/att vs 8.8 before)"
+    },
+    "TEN": {
+      "since": 8,
+      "why": "Jeffery Simmons traded away: 9.8 yds/att and 407 pass yds/g allowed since"
+    }
+  },
+  "defense_stats": {
+    "ARI": {
+      "ypa": 8.2,
+      "ypa_last3": 7.5,
+      "ypc": 4.0,
+      "ypc_last3": 3.6,
+      "blitz": 33.0,
+      "four_ypa": 8.2,
+      "sack": 6.6,
+      "hit": 14.2,
+      "big": 10.6,
+      "trend": ""
+    },
+    "ATL": {
+      "ypa": 7.2,
+      "ypa_last3": 9.2,
+      "ypc": 4.6,
+      "ypc_last3": 5.4,
+      "blitz": 25.0,
+      "four_ypa": 7.3,
+      "sack": 5.5,
+      "hit": 17.3,
+      "big": 9.4,
+      "trend": "pass worse"
+    },
+    "BUF": {
+      "ypa": 6.8,
+      "ypa_last3": 5.3,
+      "ypc": 3.7,
+      "ypc_last3": 4.2,
+      "blitz": 36.0,
+      "four_ypa": 6.9,
+      "sack": 5.6,
+      "hit": 20.3,
+      "big": 9.7,
+      "trend": "pass better"
+    },
+    "CIN": {
+      "ypa": 7.1,
+      "ypa_last3": 5.9,
+      "ypc": 4.5,
+      "ypc_last3": 5.1,
+      "blitz": 17.0,
+      "four_ypa": 6.9,
+      "sack": 7.4,
+      "hit": 14.9,
+      "big": 9.6,
+      "trend": ""
+    },
+    "CLE": {
+      "ypa": 6.6,
+      "ypa_last3": 6.7,
+      "ypc": 4.5,
+      "ypc_last3": 4.7,
+      "blitz": 27.0,
+      "four_ypa": 6.7,
+      "sack": 7.2,
+      "hit": 15.4,
+      "big": 8.7,
+      "trend": ""
+    },
+    "DAL": {
+      "ypa": 7.9,
+      "ypa_last3": 8.3,
+      "ypc": 5.2,
+      "ypc_last3": 6.7,
+      "blitz": 23.0,
+      "four_ypa": 7.6,
+      "sack": 6.0,
+      "hit": 13.9,
+      "big": 10.7,
+      "trend": "run worse"
+    },
+    "DEN": {
+      "ypa": 6.7,
+      "ypa_last3": 6.8,
+      "ypc": 4.4,
+      "ypc_last3": 4.0,
+      "blitz": 34.0,
+      "four_ypa": 6.9,
+      "sack": 6.8,
+      "hit": 20.7,
+      "big": 7.7,
+      "trend": ""
+    },
+    "DET": {
+      "ypa": 7.1,
+      "ypa_last3": 6.3,
+      "ypc": 3.8,
+      "ypc_last3": 3.2,
+      "blitz": 28.0,
+      "four_ypa": 7.0,
+      "sack": 8.3,
+      "hit": 18.1,
+      "big": 10.7,
+      "trend": ""
+    },
+    "HOU": {
+      "ypa": 7.5,
+      "ypa_last3": 8.1,
+      "ypc": 3.9,
+      "ypc_last3": 4.7,
+      "blitz": 25.0,
+      "four_ypa": 7.2,
+      "sack": 9.2,
+      "hit": 16.8,
+      "big": 10.8,
+      "trend": "run worse"
+    },
+    "IND": {
+      "ypa": 8.1,
+      "ypa_last3": 9.5,
+      "ypc": 4.7,
+      "ypc_last3": 4.9,
+      "blitz": 21.0,
+      "four_ypa": 8.3,
+      "sack": 6.6,
+      "hit": 15.0,
+      "big": 11.5,
+      "trend": ""
+    },
+    "LAC": {
+      "ypa": 7.8,
+      "ypa_last3": 8.1,
+      "ypc": 4.1,
+      "ypc_last3": 3.5,
+      "blitz": 24.0,
+      "four_ypa": 8.0,
+      "sack": 4.9,
+      "hit": 16.7,
+      "big": 9.6,
+      "trend": ""
+    },
+    "LV": {
+      "ypa": 8.4,
+      "ypa_last3": 10.3,
+      "ypc": 5.1,
+      "ypc_last3": 5.0,
+      "blitz": 28.0,
+      "four_ypa": 7.9,
+      "sack": 6.5,
+      "hit": 16.9,
+      "big": 10.5,
+      "trend": "pass worse"
+    },
+    "MIA": {
+      "ypa": 7.8,
+      "ypa_last3": 7.2,
+      "ypc": 4.2,
+      "ypc_last3": 4.6,
+      "blitz": 22.0,
+      "four_ypa": 7.7,
+      "sack": 4.8,
+      "hit": 15.5,
+      "big": 9.9,
+      "trend": ""
+    },
+    "NE": {
+      "ypa": 8.1,
+      "ypa_last3": 9.6,
+      "ypc": 4.1,
+      "ypc_last3": 4.5,
+      "blitz": 35.0,
+      "four_ypa": 7.7,
+      "sack": 7.6,
+      "hit": 16.3,
+      "big": 11.4,
+      "trend": "pass worse"
+    },
+    "NO": {
+      "ypa": 7.9,
+      "ypa_last3": 7.9,
+      "ypc": 4.4,
+      "ypc_last3": 3.7,
+      "blitz": 37.0,
+      "four_ypa": 7.9,
+      "sack": 7.8,
+      "hit": 15.0,
+      "big": 11.3,
+      "trend": ""
+    },
+    "NYJ": {
+      "ypa": 7.2,
+      "ypa_last3": 8.8,
+      "ypc": 4.4,
+      "ypc_last3": 5.1,
+      "blitz": 38.0,
+      "four_ypa": 6.8,
+      "sack": 6.9,
+      "hit": 15.6,
+      "big": 8.9,
+      "trend": "pass worse"
+    },
+    "PIT": {
+      "ypa": 7.3,
+      "ypa_last3": 8.4,
+      "ypc": 3.4,
+      "ypc_last3": 2.4,
+      "blitz": 27.0,
+      "four_ypa": 6.3,
+      "sack": 7.5,
+      "hit": 14.9,
+      "big": 9.9,
+      "trend": "run better"
+    },
+    "TEN": {
+      "ypa": 9.9,
+      "ypa_last3": 9.9,
+      "ypc": 3.2,
+      "ypc_last3": 3.2,
+      "blitz": 24.0,
+      "four_ypa": 9.8,
+      "sack": 4.4,
+      "hit": 13.3,
+      "big": 14.6,
+      "trend": "",
+      "since": 8,
+      "why": "Jeffery Simmons traded away: 9.8 yds/att and 407 pass yds/g allowed since"
+    },
+    "WAS": {
+      "ypa": 7.1,
+      "ypa_last3": 6.5,
+      "ypc": 3.7,
+      "ypc_last3": 3.6,
+      "blitz": 42.0,
+      "four_ypa": 7.2,
+      "sack": 4.8,
+      "hit": 14.2,
+      "big": 8.8,
+      "trend": ""
+    }
+  }
 }

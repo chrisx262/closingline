@@ -272,6 +272,10 @@ import importlib.util as _ilu
 _gs = _ilu.spec_from_file_location("grade_props", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "grade_props.py"))
 _gp = _ilu.module_from_spec(_gs); _gs.loader.exec_module(_gp)
+check("props board serves defense form (blitz, 4-man yds/att, last 3)",
+      all({"ypa", "ypa_last3", "blitz", "four_ypa"} <= set(x)
+          for x in _pb.get("defense_stats", {}).values()) and _pb.get("defense_stats"))
+check("props page renders the defense form table", 'id="pform"' in c.get("/props").text)
 check("props picks and ranges carry their 90-minute final check (or null)",
       all("final" in r for r in _pb["picks"] + _pb["ranges"]))
 check("grader matches pbp short names to ESPN full names",

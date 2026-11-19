@@ -61,21 +61,102 @@ def trim(v):
     return sum(v) / len(v)
 
 
-def worst_lists(pbp, week):
-    """Rank every defense on every snap before `week`."""
+def worst_lists(pbp, week, changes=None):
+    """Rank every defense on every snap before `week`.
+
+    `changes` = {team: {"since": week, "why": ...}} from props_board.json: a
+    defense that changed with a roster move (CHI after the Jeffery Simmons
+    trade) is ranked only on its games since. Plain recency weighting was
+    tested and did not predict next week's yards any better than the full
+    season (2025-26), so only a known roster change gets this treatment."""
+    since = {t: c["since"] for t, c in (changes or {}).items()}
+    # the cut only applies to ranking the defense -- players keep every game
+    rank = lambda k: k[0] >= since.get(k[4], 0)
     qb = {k: v for k, v in pb.load(pbp).items() if k[0] < week}
     d = defaultdict(lambda: [0, 0.0, set()])
-    for (wk, gid, _, pos, de), (a, c, y) in qb.items():
+    for (wk, gid, _, pos, de), (a, c, y) in filter(lambda kv: rank(kv[0]), qb.items()):
         d[de][0] += a; d[de][1] += y; d[de][2].add(gid)
     rb = {k: v for k, v in prb.load(pbp).items() if k[0] < week}
     r = defaultdict(lambda: [0, 0.0, set()])
-    for (wk, gid, _, pos, de), (c, y) in rb.items():
+    for (wk, gid, _, pos, de), (c, y) in filter(lambda kv: rank(kv[0]), rb.items()):
         r[de][0] += c; r[de][1] += y; r[de][2].add(gid)
     worst = lambda m, n: sorted(m, key=m.get)[-n:][::-1]       # worst first
     return {"pass": {"ours": worst({t: v[1] / v[0] for t, v in d.items()}, N_PASS),
                      "eric": worst({t: v[1] / len(v[2]) for t, v in d.items()}, N_PASS)},
             "run": {"ours": worst({t: v[1] / v[0] for t, v in r.items()}, N_RUN),
                     "eric": worst({t: v[1] / len(v[2]) for t, v in r.items()}, N_RUN)}}, qb, rb
+
+
+FTN_URL = ("https://github.com/nflverse/nflverse-data/releases/download/ftn_charting/"
+           "ftn_charting_{season}.csv")
+
+
+def ftn_path(season):
+    """FTN charting (blitzers, pass rushers per play), refreshed every 12 hours."""
+    import time
+    path = os.path.join(ROOT, ".cache", "ftn", f"ftn_{season}.csv")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path) or time.time() - os.path.getmtime(path) > 12 * 3600:
+        r = requests.get(FTN_URL.format(season=season), timeout=300)
+        r.raise_for_status()
+        open(path, "wb").write(r.content)
+    return path
+
+
+def defense_stats(pbp, season, week, teams, changes=None):
+    """Season vs last-3-games form, plus how each pass rush works.
+
+    blitz      share of dropbacks with 1+ blitzer (FTN charting)
+    four_ypa   yards per attempt allowed when rushing 4 or fewer
+    sack, hit  per dropback; big = completions of 20+ yards per attempt
+    trend      'better' / 'worse' when the last 3 games' yards per attempt
+               or per carry sit 1.5+ / 0.8+ away from the season's"""
+    import gzip
+    ftn = {}
+    for r in csv.DictReader(open(ftn_path(season))):
+        ftn[(r["nflverse_game_id"], r["nflverse_play_id"])] = r
+    g = defaultdict(lambda: defaultdict(float))             # (team, week) -> tallies
+    with gzip.open(pbp, "rt") as fh:
+        for r in csv.DictReader(fh):
+            t = r["defteam"]
+            if (r["season_type"] != "REG" or t not in teams or int(r["week"]) >= week
+                    or r.get("two_point_attempt") == "1"):
+                continue
+            x = g[(t, int(r["week"]))]
+            if r["qb_dropback"] == "1":
+                f = ftn.get((r["game_id"], r["play_id"]), {})
+                rush, bl = int(f.get("n_pass_rushers") or 0), int(f.get("n_blitzers") or 0)
+                sack = r["sack"] == "1"
+                x["db"] += 1; x["sack"] += sack; x["hit"] += sack or r["qb_hit"] == "1"
+                x["charted"] += rush > 0; x["blitz"] += bl > 0
+                if r["pass_attempt"] == "1" and not sack:
+                    y = float(r["passing_yards"] or 0)
+                    x["att"] += 1; x["py"] += y; x["big"] += y >= 20
+                    if 0 < rush <= 4:
+                        x["att4"] += 1; x["py4"] += y
+            elif r["rush_attempt"] == "1" and r.get("qb_kneel") != "1":
+                x["car"] += 1; x["ry"] += float(r["rushing_yards"] or 0)
+    out = {}
+    for t in teams:
+        wks = sorted(w for (tt, w) in g if tt == t
+                     and w >= (changes or {}).get(t, {}).get("since", 0))
+        tot = lambda key, ws: sum(g[(t, w)][key] for w in ws)
+        rate = lambda a, b, ws: tot(a, ws) / tot(b, ws) if tot(b, ws) else None
+        last = wks[-3:]
+        ypa, ypa3 = rate("py", "att", wks), rate("py", "att", last)
+        ypc, ypc3 = rate("ry", "car", wks), rate("ry", "car", last)
+        trend = []
+        if ypa and ypa3 and abs(ypa3 - ypa) >= 1.5:
+            trend.append("pass " + ("better" if ypa3 < ypa else "worse"))
+        if ypc and ypc3 and abs(ypc3 - ypc) >= 0.8:
+            trend.append("run " + ("better" if ypc3 < ypc else "worse"))
+        r1 = lambda v, n=1: round(v, n) if v is not None else None
+        out[t] = {"ypa": r1(ypa), "ypa_last3": r1(ypa3), "ypc": r1(ypc), "ypc_last3": r1(ypc3),
+                  "blitz": r1(100 * rate("blitz", "charted", wks), 0) if tot("charted", wks) else None,
+                  "four_ypa": r1(rate("py4", "att4", wks)),
+                  "sack": r1(100 * rate("sack", "db", wks)), "hit": r1(100 * rate("hit", "db", wks)),
+                  "big": r1(100 * rate("big", "att", wks)), "trend": ", ".join(trend)}
+    return out
 
 
 def odds_events():
@@ -135,8 +216,8 @@ def report(event_id):
     return out
 
 
-def build(pbp, season, week):
-    lists, qb_games, rb_games = worst_lists(pbp, week)
+def build(pbp, season, week, changes=None):
+    lists, qb_games, rb_games = worst_lists(pbp, week, changes)
     qbs = pr.starters({k: [v[0], v[2]] for k, v in qb_games.items()}, "QB")
     rbs = pr.starters({k: list(v) for k, v in rb_games.items()}, "RB")
     # QB attempts: starters vs each list (the backtest's trimmed average)
@@ -181,9 +262,17 @@ def build(pbp, season, week):
                 short = names[0][1] if names else pick[1].replace(" ", "")
                 own = [v[1] for v in starts.values() if v[0] == short]
                 allowed = [v[1] for v in starts.values() if v[3] == opp]
+                # roster change: games since count fully once there are 4 of
+                # them; until then the season's games fill in the rest
+                cut = (changes or {}).get(opp, {}).get("since", 0)
+                recent = [v[1] for k, v in starts.items() if v[3] == opp and k[0] >= cut]
+                d_typ = trim(allowed) if allowed else None
+                if cut and recent:
+                    w = min(len(recent), 4) / 4
+                    d_typ = w * trim(recent) + (1 - w) * d_typ
                 status = hurt.get(disp, "")
                 if pos == "QB":
-                    proj = (trim(own) + trim(allowed)) / 2 if own else None
+                    proj = (trim(own) + d_typ) / 2 if own and d_typ else None
                     ln = line(lines, "player_pass_yds", disp)
                     al = line(lines, "player_pass_attempts", disp)
                     ap = min(att_proj[n] for n in on)
@@ -233,7 +322,18 @@ if __name__ == "__main__":
     board = json.load(open(BOARD))
     season, week = board["season"], int(sys.argv[sys.argv.index("--week") + 1]) \
         if "--week" in sys.argv else board["week"]
-    lists, rows = build(sys.argv[1], season, week)
+    changes = board.get("roster_changes", {})
+    lists, rows = build(sys.argv[1], season, week, changes)
+    listed = sorted({t for k in ("pass", "run") for n in ("ours", "eric") for t in lists[k][n]})
+    dstats = defense_stats(sys.argv[1], season, week, listed, changes)
+    for t, c in changes.items():
+        if t in dstats:
+            dstats[t]["since"], dstats[t]["why"] = c["since"], c["why"]
+    for t in listed:
+        d = dstats[t]
+        print(f"{t:<3} ypa {d['ypa']} (last3 {d['ypa_last3']})  ypc {d['ypc']} (last3 {d['ypc_last3']})"
+              f"  blitz {d['blitz']}%  4-man ypa {d['four_ypa']}  sack {d['sack']}%  hit {d['hit']}%"
+              f"  20+ {d['big']}%  {d['trend']}" + (f"  [since wk {changes[t]['since']}]" if t in changes else ""))
     for k in ("pass", "run"):
         print(k, "ours", lists[k]["ours"], "| eric", lists[k]["eric"])
     for r in rows:
@@ -248,6 +348,7 @@ if __name__ == "__main__":
         board["defenses"]["pass"]["eric_basis"] = "passing yards allowed per game (Eric's method)"
         board["defenses"]["run"]["eric_basis"] = "rushing yards allowed per game (Eric's method)"
         board["week"], board["through_week"] = week, week - 1
+        board["defense_stats"] = dstats
         json.dump(board, open(BOARD, "w"), indent=2)
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
         old = list(csv.DictReader(open(pr.OUT)))

@@ -75,6 +75,12 @@ CONTENT = """
   <div class="dgrid" id="pranges"></div>
   <h2>The worst <em>defenses</em></h2>
   <div class="dgrid" id="pdef"></div>
+  <h2>Defense <em>form</em></h2>
+  <p class="pnote">Season vs the last 3 games, and how each pass rush works (FTN charting):
+  blitz rate, yards per attempt when they rush only 4, sacks and hits per dropback, and 20+
+  yard completions. Flagged when recent form moves a long way from the season. A defense
+  changed by a roster move is measured only since the move.</p>
+  <div id="pform"></div>
   <h2>What the <em>testing</em> said</h2>
   <div id="pleads"></div>
   <p class="pnote" id="pnote"></p>
@@ -188,6 +194,22 @@ function renderProps(d){
   document.getElementById('pdef').innerHTML=h+
     '<p class="pnote" style="grid-column:1/-1">Worst first. Green = on both lists. Per-game '+
     'numbers punish defenses whose teams are winning (opponents throw late); per-play numbers do not.</p>';
+
+  var DS=d.defense_stats||{}, ft=Object.keys(DS).sort();
+  var f='<table class="pp"><tr><th>D</th><th class="n">Yds/att</th><th class="n">Last 3</th>'+
+        '<th class="n">Yds/carry</th><th class="n">Last 3</th><th class="n">Blitz</th>'+
+        '<th class="n">4-man yds/att</th><th class="n">Sack</th><th class="n">Hit</th>'+
+        '<th class="n">20+</th><th>Note</th></tr>';
+  function v(x,suf){return x===null||x===undefined?'':esc(x)+(suf||'');}
+  ft.forEach(function(t){var x=DS[t];
+    f+='<tr><td><b>'+esc(t)+'</b></td><td class="n">'+v(x.ypa)+'</td><td class="n">'+v(x.ypa_last3)+
+       '</td><td class="n">'+v(x.ypc)+'</td><td class="n">'+v(x.ypc_last3)+'</td><td class="n">'+
+       v(x.blitz,'%')+'</td><td class="n">'+v(x.four_ypa)+'</td><td class="n">'+v(x.sack,'%')+
+       '</td><td class="n">'+v(x.hit,'%')+'</td><td class="n">'+v(x.big,'%')+'</td><td>'+
+       (x.trend?'<span class="lean">'+esc(x.trend)+'</span> ':'')+
+       (x.since?'<span style="color:var(--dim);font-size:.64rem">since wk '+esc(x.since)+': '+esc(x.why)+'</span>':'')+
+       '</td></tr>';});
+  document.getElementById('pform').innerHTML=ft.length?'<div class="pscroll">'+f+'</table></div>':'';
 
   document.getElementById('pleads').innerHTML=(d.leads||[]).map(function(l){
     var c=l.status.indexOf('best')===0?'best':(l.status.indexOf('no edge')===0?'no':'');
