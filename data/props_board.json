@@ -1,68 +1,64 @@
 {
   "season": 2026,
-  "week": 10,
-  "through_week": 9,
+  "week": 11,
+  "through_week": 10,
   "defenses": {
     "pass": {
       "ours": [
-        "CHI",
-        "MIA",
-        "IND",
-        "ARI",
-        "TEN",
         "LV",
-        "LAC",
-        "NE"
+        "TEN",
+        "ARI",
+        "CHI",
+        "NE",
+        "IND",
+        "MIA",
+        "DAL"
       ],
       "eric": [
-        "DET",
         "TEN",
+        "DET",
         "HOU",
+        "PIT",
         "WAS",
-        "NO",
-        "BUF",
         "NE",
-        "DEN"
+        "BUF",
+        "DAL"
       ],
       "ours_basis": "passing yards allowed per attempt",
-      "eric_basis": "passing yards allowed per game"
+      "eric_basis": "passing yards allowed per game (Eric's method)"
     },
     "run": {
       "ours": [
-        "LV",
         "DAL",
+        "LV",
         "IND",
-        "CLE",
         "ATL",
-        "NO",
-        "CIN",
-        "CAR"
+        "CLE",
+        "CIN"
       ],
       "eric": [
-        "LV",
         "DAL",
+        "LV",
+        "NYJ",
         "IND",
-        "CLE",
         "ATL",
-        "CAR",
-        "LAC",
-        "NO"
+        "ARI"
       ],
-      "ours_basis": "rushing yards allowed per carry",
-      "eric_basis": "rushing yards allowed per game"
+      "ours_basis": "rushing yards allowed per carry (6 worst)",
+      "eric_basis": "rushing yards allowed per game (Eric's method, 6 worst)"
     }
   },
   "leads": [
     {
       "key": "qb_att",
       "name": "QB attempts UNDER vs the 8 worst pass D",
-      "rule": "Bet the under when the book's attempts line is 3+ above the trimmed average (drop the highest and lowest game) of starters vs those defenses.",
-      "backtest": "23-10 (unders), 2025 + 2026 vs real closing-ish lines",
+      "rule": "Bet the under when the book's attempts line is 3+ above the trimmed average of starters vs those defenses. Strongest when the QB's team is favored - teams that lead stop throwing.",
+      "backtest": "23-10 overall; favorites 16-5 (2025 7-3, 2026 9-2), underdogs 7-5",
       "status": "best lead"
     },
     {
       "key": "rb_yds",
-      "name": "RB rushing yards vs the 8 worst run D",
+      "name": "RB rushing yards OVER vs the 6 worst run D",
       "rule": "Trimmed carries x blended yards per carry; bet the OVER when it beats the line by 10+ yards AND the back's team is favored (teams that fall behind stop running). Skip underdogs.",
       "backtest": "Overs 10+ above the line: favorites 21-10 (2025 10-7, 2026 11-3), underdogs 13-15. Lead backs overall: team won 59% overs, team lost 26%.",
       "status": "small lead"

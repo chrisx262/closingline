@@ -45,6 +45,7 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 .pscroll table.pp{min-width:560px}
 .dbox .pscroll table.pp{min-width:400px;margin:0}
 .hit{color:var(--up);font-weight:900}.miss{color:var(--down);font-weight:900}
+.lean{font-size:.62rem;font-weight:900;color:var(--up)}
 .fin{font-size:.6rem;font-weight:800;color:var(--dim)}.fin.ok{color:var(--up)}
 .fin.bad,.fin.warn{color:var(--down)}
 .pnote{color:var(--dim);font-size:.68rem;line-height:1.6;max-width:72ch}
@@ -54,7 +55,7 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 CONTENT = """
 <div class="hero">
   <h1>Player <em>Props</em></h1>
-  <p>Players facing the 8 worst defenses, projected with a trimmed average (drop each
+  <p>QBs facing the 8 worst pass defenses and running backs facing the 6 worst run defenses, projected with a trimmed average (drop each
   group's highest and lowest game) and tested against real sportsbook lines from 2025
   and 2026 before anything went on this page. Two leads survived. Receivers did not.</p>
   <div class="countdown" id="pweek">Loading&hellip;</div>
@@ -64,13 +65,15 @@ CONTENT = """
   <div class="pstat" id="pstat"></div>
   <h2>This week's <em>picks</em></h2>
   <div id="ppicks"></div>
-  <h2>Floor &amp; <em>ceiling</em></h2>
-  <p class="pnote">Not bets &mdash; tracking. Each QB's passing yards and lead back's rushing
+  <h2>Projections, floor &amp; <em>ceiling</em></h2>
+  <p class="pnote">First look early in the week, updated as injury news lands and confirmed
+  90 minutes before kickoff. Proj = our projected yards; line = the sportsbooks' consensus;
+  the green note is the lean (yardage overs only). Each QB's passing yards and lead back's rushing
   yards this season (lowest, typical, highest), next to the fewest and most yards that defense
   has allowed. Logged before kickoff; after the game we mark whether he cleared his floor and
   whether he reached his typical number &mdash; the two things we actually bet on. <span id="pzones"></span></p>
   <div class="dgrid" id="pranges"></div>
-  <h2>The 8 worst <em>defenses</em></h2>
+  <h2>The worst <em>defenses</em></h2>
   <div class="dgrid" id="pdef"></div>
   <h2>What the <em>testing</em> said</h2>
   <div id="pleads"></div>
@@ -144,10 +147,11 @@ function renderProps(d){
     'So far: <b>'+Z.floor+' of '+Z.graded+'</b> at or above the floor, <b>'+Z.typical+' of '+
     Z.graded+'</b> reached typical.':'';
   var rh='';
-  [['ours','Our 8 worst'],['eric',"Eric's 8 worst"]].forEach(function(L){
+  [['ours','Our list'],['eric',"Eric's list"]].forEach(function(L){
     var rs=rg.filter(function(r){return r.list===L[0]||r.list==='both';});
     var t='<table class="pp"><tr><th>Player</th><th class="n">Floor</th><th class="n">Typical</th>'+
-          '<th class="n">Ceiling</th><th class="n">D allowed</th><th>Result</th></tr>';
+          '<th class="n">Ceiling</th><th class="n">Proj</th><th class="n">Line</th>'+
+          '<th class="n">D allowed</th><th>Result</th></tr>';
     ['QB','RB'].forEach(function(pos){
       rs.filter(function(r){return r.pos===pos;}).forEach(function(r){
         function mk(ok,lab){return '<span class="'+(ok?'hit':'miss')+'">'+(ok?'&#10003; ':'&#10007; ')+lab+'</span>';}
@@ -156,9 +160,13 @@ function renderProps(d){
                 '<span class="res pend">pending</span>';
         t+='<tr><td><b>'+esc(r.player)+'</b><br><span style="color:var(--dim);font-size:.66rem">'+
            esc(r.pos)+' &middot; '+esc(r.team)+' vs '+esc(r.opp)+' &middot; '+esc(r.games)+
-           (r.games==='1'?' game':' games')+'</span>'+finTxt(r.final)+'</td>'+
+           (r.games==='1'?' game':' games')+
+           (r.fav_by?' &middot; '+(parseFloat(r.fav_by)>0?'fav ':'dog ')+esc(r.fav_by.replace(/^[+-]/,'')):'')+
+           (r.status?' &middot; <b>'+esc(r.status)+'</b>':'')+'</span>'+
+           (r.lean?'<br><span class="lean">'+esc(r.lean)+'</span>':'')+finTxt(r.final)+'</td>'+
            '<td class="n">'+esc(r.floor)+'</td><td class="n">'+esc(r.typical)+'</td>'+
-           '<td class="n">'+esc(r.ceiling)+'</td><td class="n">'+esc(r.def_floor)+'&ndash;'+
+           '<td class="n">'+esc(r.ceiling)+'</td><td class="n"><b>'+esc(r.proj||'')+'</b></td>'+
+           '<td class="n">'+esc(r.line||'')+'</td><td class="n">'+esc(r.def_floor)+'&ndash;'+
            esc(r.def_ceiling)+'</td><td>'+res+'</td></tr>';
       });
     });
