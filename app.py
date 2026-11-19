@@ -1556,8 +1556,15 @@ def props_board():
         for r in rows:
             c = final.get((r["season"], r["week"], kind, r["team"], r["player"]))
             r["final"] = {"status": c["status"], "note": c["note"]} if c else None
-    zones = {z: sum(1 for r in ranges if r["zone"] == z)
-             for z in ("below", "inside", "above")}
+    # graded the way the bets are made: did he clear his floor, reach his typical
+    for r in ranges:
+        done = r["actual"] != "" and r["zone"] != "void"
+        r["hit_floor"] = done and float(r["actual"]) >= float(r["floor"]) if done else None
+        r["hit_typical"] = done and float(r["actual"]) >= float(r["typical"]) if done else None
+    graded = [r for r in ranges if r["hit_floor"] is not None]
+    zones = {"graded": len(graded),
+             "floor": sum(1 for r in graded if r["hit_floor"]),
+             "typical": sum(1 for r in graded if r["hit_typical"])}
     return {**board, "picks": picks, "record": record,
             "ranges": ranges, "range_zones": zones,
             "note": ("Logged before kickoff and never edited. Small samples: "

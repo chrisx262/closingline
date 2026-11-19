@@ -262,7 +262,12 @@ check("props record counts best bets separately from track-only",
 check("props page is in the nav", '/props' in c.get("/circa").text)
 check("props board serves floor/ceiling rows tagged ours / eric / both",
       _pb.get("ranges") and {r["list"] for r in _pb["ranges"]} <= {"ours", "eric", "both"}
-      and set(_pb["range_zones"]) == {"below", "inside", "above"})
+      and set(_pb["range_zones"]) == {"graded", "floor", "typical"})
+_g = [r for r in _pb["ranges"] if r["hit_floor"] is not None]
+check("floor/ceiling graded as bet: at/above floor, reached typical (never 'inside')",
+      all(r["hit_floor"] == (float(r["actual"]) >= float(r["floor"])) and
+          r["hit_typical"] == (float(r["actual"]) >= float(r["typical"])) for r in _g)
+      and _pb["range_zones"]["floor"] >= _pb["range_zones"]["typical"])
 import importlib.util as _ilu
 _gs = _ilu.spec_from_file_location("grade_props", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "grade_props.py"))

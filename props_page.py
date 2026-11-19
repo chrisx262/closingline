@@ -44,7 +44,7 @@ table.pp td.n{text-align:right;font-variant-numeric:tabular-nums}
 .pscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 .pscroll table.pp{min-width:560px}
 .dbox .pscroll table.pp{min-width:400px;margin:0}
-.zone.inside{color:var(--up);font-weight:900}.zone.below,.zone.above{color:var(--down);font-weight:900}
+.hit{color:var(--up);font-weight:900}.miss{color:var(--down);font-weight:900}
 .fin{font-size:.6rem;font-weight:800;color:var(--dim)}.fin.ok{color:var(--up)}
 .fin.bad,.fin.warn{color:var(--down)}
 .pnote{color:var(--dim);font-size:.68rem;line-height:1.6;max-width:72ch}
@@ -67,8 +67,8 @@ CONTENT = """
   <h2>Floor &amp; <em>ceiling</em></h2>
   <p class="pnote">Not bets &mdash; tracking. Each QB's passing yards and lead back's rushing
   yards this season (lowest, typical, highest), next to the fewest and most yards that defense
-  has allowed. Logged before kickoff; after the game we mark whether he landed below, inside or
-  above his range. <span id="pzones"></span></p>
+  has allowed. Logged before kickoff; after the game we mark whether he cleared his floor and
+  whether he reached his typical number &mdash; the two things we actually bet on. <span id="pzones"></span></p>
   <div class="dgrid" id="pranges"></div>
   <h2>The 8 worst <em>defenses</em></h2>
   <div class="dgrid" id="pdef"></div>
@@ -140,8 +140,9 @@ function renderProps(d){
 
   var rg=(d.ranges||[]).filter(function(r){return String(r.week)===String(d.week)&&r.zone!=='void';});
   var Z=d.range_zones||{};
-  document.getElementById('pzones').innerHTML=(Z.inside+Z.below+Z.above)?
-    'So far: <b>'+Z.inside+'</b> inside, <b>'+Z.below+'</b> below, <b>'+Z.above+'</b> above.':'';
+  document.getElementById('pzones').innerHTML=Z.graded?
+    'So far: <b>'+Z.floor+' of '+Z.graded+'</b> at or above the floor, <b>'+Z.typical+' of '+
+    Z.graded+'</b> reached typical.':'';
   var rh='';
   [['ours','Our 8 worst'],['eric',"Eric's 8 worst"]].forEach(function(L){
     var rs=rg.filter(function(r){return r.list===L[0]||r.list==='both';});
@@ -149,7 +150,9 @@ function renderProps(d){
           '<th class="n">Ceiling</th><th class="n">D allowed</th><th>Result</th></tr>';
     ['QB','RB'].forEach(function(pos){
       rs.filter(function(r){return r.pos===pos;}).forEach(function(r){
-        var res=r.zone?'<span class="zone '+esc(r.zone)+'">'+esc(r.actual||'-')+' '+esc(r.zone)+'</span>':
+        function mk(ok,lab){return '<span class="'+(ok?'hit':'miss')+'">'+(ok?'&#10003; ':'&#10007; ')+lab+'</span>';}
+        var res=r.hit_floor!==null&&r.hit_floor!==undefined?'<b>'+esc(r.actual)+'</b><br>'+
+                mk(r.hit_floor,'floor')+' '+mk(r.hit_typical,'typical'):
                 '<span class="res pend">pending</span>';
         t+='<tr><td><b>'+esc(r.player)+'</b><br><span style="color:var(--dim);font-size:.66rem">'+
            esc(r.pos)+' &middot; '+esc(r.team)+' vs '+esc(r.opp)+' &middot; '+esc(r.games)+
