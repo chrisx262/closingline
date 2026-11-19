@@ -7,3 +7,5 @@ logged_at_utc,season,week,player,team,opp,stat,side,line,best_price,book,project
 2026-11-15T06:30Z,2026,10,Justice Hill,BAL,LAC,rec_yds,Over,11.5,-115,consensus,29.6,+18.1,WR targets method (LOST in backtest),track only,win,34
 2026-11-15T06:30Z,2026,10,Greg Dulcich,MIA,IND,rec_yds,Over,32.5,-115,consensus,47.3,+14.8,WR targets method (LOST in backtest),track only,loss,0
 2026-11-15T06:30Z,2026,10,Tyler Higbee,LA,ARI,rec_yds,Under,35.5,-113,consensus,25.0,-10.5,WR targets method (LOST in backtest),track only,win,17
+2026-11-19T08:00Z,2026,11,Bo Nix,DEN,LV,pass_attempts,Under,32.5,-125,bovada,29.4,+3.1,QB attempts trimmed avg vs worst pass D (favored),BEST BET,,
+2026-11-19T08:00Z,2026,11,Dak Prescott,DAL,TEN,pass_attempts,Under,35.5,-103,draftkings,29.4,+6.1,QB attempts trimmed avg vs worst pass D (favored),small,,
