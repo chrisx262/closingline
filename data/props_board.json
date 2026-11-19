@@ -4,27 +4,75 @@
   "through_week": 9,
   "defenses": {
     "pass": {
-      "ours": ["CHI", "MIA", "IND", "ARI", "TEN", "LV", "LAC", "NE"],
-      "eric": ["DET", "TEN", "HOU", "WAS", "NO", "BUF", "NE", "DEN"],
+      "ours": [
+        "CHI",
+        "MIA",
+        "IND",
+        "ARI",
+        "TEN",
+        "LV",
+        "LAC",
+        "NE"
+      ],
+      "eric": [
+        "DET",
+        "TEN",
+        "HOU",
+        "WAS",
+        "NO",
+        "BUF",
+        "NE",
+        "DEN"
+      ],
       "ours_basis": "passing yards allowed per attempt",
       "eric_basis": "passing yards allowed per game"
     },
     "run": {
-      "ours": ["LV", "DAL", "IND", "CLE", "ATL", "NO", "CIN", "CAR"],
-      "eric": ["LV", "DAL", "IND", "CLE", "ATL", "CAR", "LAC", "NO"],
+      "ours": [
+        "LV",
+        "DAL",
+        "IND",
+        "CLE",
+        "ATL",
+        "NO",
+        "CIN",
+        "CAR"
+      ],
+      "eric": [
+        "LV",
+        "DAL",
+        "IND",
+        "CLE",
+        "ATL",
+        "CAR",
+        "LAC",
+        "NO"
+      ],
       "ours_basis": "rushing yards allowed per carry",
       "eric_basis": "rushing yards allowed per game"
     }
   },
   "leads": [
-    {"key": "qb_att", "name": "QB attempts UNDER vs the 8 worst pass D",
-     "rule": "Bet the under when the book's attempts line is 3+ above the trimmed average (drop the highest and lowest game) of starters vs those defenses.",
-     "backtest": "23-10 (unders), 2025 + 2026 vs real closing-ish lines", "status": "best lead"},
-    {"key": "rb_yds", "name": "RB rushing yards vs the 8 worst run D",
-     "rule": "Trimmed carries x blended yards per carry; bet when it disagrees with the line by 10+ yards. Overs only count when the line is 60+.",
-     "backtest": "44-29 overall; overs on 60+ lines 9-4", "status": "small lead"},
-    {"key": "wr", "name": "WR receiving yards / receptions",
-     "rule": "Target share and raw recent-target methods.",
-     "backtest": "Lost in ~380 bets; target methods failed the 2026 check", "status": "no edge - track only"}
+    {
+      "key": "qb_att",
+      "name": "QB attempts UNDER vs the 8 worst pass D",
+      "rule": "Bet the under when the book's attempts line is 3+ above the trimmed average (drop the highest and lowest game) of starters vs those defenses.",
+      "backtest": "23-10 (unders), 2025 + 2026 vs real closing-ish lines",
+      "status": "best lead"
+    },
+    {
+      "key": "rb_yds",
+      "name": "RB rushing yards vs the 8 worst run D",
+      "rule": "Trimmed carries x blended yards per carry; bet the OVER when it beats the line by 10+ yards AND the back's team is favored (teams that fall behind stop running). Skip underdogs.",
+      "backtest": "Overs 10+ above the line: favorites 21-10 (2025 10-7, 2026 11-3), underdogs 13-15. Lead backs overall: team won 59% overs, team lost 26%.",
+      "status": "small lead"
+    },
+    {
+      "key": "wr",
+      "name": "WR receiving yards / receptions",
+      "rule": "Target share and raw recent-target methods.",
+      "backtest": "Lost in ~380 bets; target methods failed the 2026 check",
+      "status": "no edge - track only"
+    }
   ]
 }
